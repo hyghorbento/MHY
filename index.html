@@ -98,7 +98,70 @@ $('connectionForm').onsubmit=async e=>{e.preventDefault();const url=$('projectUR
 $('account').onclick=async()=>{if(user){const {error}=await db.auth.signOut();if(error)notify(error.message);}else if(!db)openConnectionSettings();else $('loginDialog').showModal();};
 // Feedback dentro do dialog: mensagens externas ficam atrás da camada modal nativa.
 $('loginForm').onsubmit=async e=>{e.preventDefault();const button=$('loginSubmit');if(button.disabled)return;const emailInput=e.target.elements.email,passwordInput=e.target.elements.password;emailInput.value=emailInput.value.trim();if(!emailInput.validity.valid){$('loginFeedback').textContent='Informe um e-mail válido para entrar.';emailInput.focus();return;}if(!passwordInput.value){$('loginFeedback').textContent='Informe sua senha para entrar.';passwordInput.focus();return;}button.disabled=true;button.textContent='Entrando…';const feedback=$('loginFeedback');feedback.textContent='Verificando seu acesso…';const slow=setTimeout(()=>{feedback.textContent='A conexão está demorando. Verifique sua internet. Se estiver usando a prévia desta conversa, tente o arquivo publicado em uma hospedagem HTTPS.';},15000);try{if(!db)throw Error('Configure a conexão com o Supabase antes de entrar.');const f=new FormData(e.target);const {data,error}=await db.auth.signInWithPassword({email:String(f.get('email')).trim(),password:f.get('password')});if(error)throw error;if(!data.session)throw Error('Não foi possível iniciar a sessão.');feedback.textContent='Acesso confirmado.';$('loginDialog').close();e.target.reset();}catch(error){const message=error.message||'Não foi possível entrar.';feedback.textContent=/invalid login credentials/i.test(message)?'E-mail ou senha incorretos. Use a conta criada em Supabase → Authentication → Users; ela pode ser diferente do seu login no painel Supabase.':/email not confirmed/i.test(message)?'Seu e-mail ainda não foi confirmado. Confirme o e-mail ou verifique o usuário em Authentication → Users.':/failed to fetch|network|load failed/i.test(message)?'Não foi possível alcançar o Supabase. Verifique a internet e se a prévia permite acesso ao projeto.':/invalid api key|invalid.*key/i.test(message)?'A chave pública não foi aceita. Confira se a URL e a chave pertencem ao mesmo projeto.':message;}finally{clearTimeout(slow);button.disabled=false;button.textContent='Entrar';}};
-async function applySession(session){user=session?.user||null;if(channel){await db.removeChannel(channel);channel=null;}cart.clear();resetCheckoutKey();$('connection').textContent=user?'Supabase • conectando':configured?'Supabase • entre na sua conta':'Demonstração • dados temporários';$('account').textContent=user?'Sair':'Conectar';$('demoNotice').classList.toggle('hidden',Boolean(user));if(!user){setDemo();return;}products=[];sales=[];movements=[];render();try{await load();$('connection').textContent='Supabase • conectado';channel=db.channel('store-'+user.id).on('postgres_changes',{event:'*',schema:'public',filter:'user_id=eq.'+user.id},()=>load().catch(e=>notify(e.message))).subscribe(status=>{if(status==='SUBSCRIBED')$('connection').textContent='Supabase • tempo real';if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status))$('connection').textContent='Conectado • tempo real indisponível';});}catch(e){$('connection').textContent='Erro na conexão';notify(e.message);}}
+// Eventos de sessão podem se sobrepor na inicialização e na renovação.
+// Serializa as transições e reutiliza o canal da mesma sessão.
+let sessionRevision = 0;
+let sessionQueue = Promise.resolve();
+function applySession(session) {
+  const revision = ++sessionRevision;
+  const nextUser = session?.user || null;
+  sessionQueue = sessionQueue.catch(() => {}).then(async () => {
+    if (revision !== sessionRevision) return;
+    const changedUser = user?.id !== nextUser?.id;
+    user = nextUser;
+    if (!changedUser && channel && !['closed','errored'].includes(channel.state)) {
+      return;
+    }
+    const previousChannel = channel;
+    channel = null;
+    if (previousChannel) await db.removeChannel(previousChannel);
+    if (revision !== sessionRevision) return;
+    if (changedUser) {
+      cart.clear();
+      resetCheckoutKey();
+    }
+    $('connection').textContent = user
+      ? 'Supabase • conectando'
+      : configured ? 'Supabase • entre na sua conta' : 'Demonstração • dados temporários';
+    $('account').textContent = user ? 'Sair' : 'Conectar';
+    $('demoNotice').classList.toggle('hidden', Boolean(user));
+    if (!user) {
+      setDemo();
+      return;
+    }
+    if (changedUser) {
+      products = [];
+      sales = [];
+      movements = [];
+      render();
+    }
+    try {
+      await load();
+      if (revision !== sessionRevision) return;
+      $('connection').textContent = 'Supabase • conectado';
+      // O nome único também evita reutilizar uma instância já inscrita pelo SDK.
+      const nextChannel = db.channel('store-' + user.id + '-' + revision);
+      nextChannel.on('postgres_changes', {
+        event: '*', schema: 'public', filter: 'user_id=eq.' + user.id
+      }, () => {
+        if (channel === nextChannel) load().catch(error => notify(error.message));
+      });
+      channel = nextChannel;
+      nextChannel.subscribe(status => {
+        if (channel !== nextChannel) return;
+        if (status === 'SUBSCRIBED') $('connection').textContent = 'Supabase • tempo real';
+        if (['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status)) {
+          $('connection').textContent = 'Conectado • tempo real indisponível';
+        }
+      });
+    } catch (error) {
+      if (revision !== sessionRevision) return;
+      $('connection').textContent = 'Erro na conexão';
+      notify(error.message);
+    }
+  });
+  return sessionQueue;
+}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&user)load().catch(e=>notify(e.message));});
 // SQL incluído no próprio arquivo: executado uma vez no painel do seu projeto.
 const setupSQL = `
