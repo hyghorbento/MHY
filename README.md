@@ -36,3 +36,34 @@ A primeira conexão GitHub/Netlify ainda precisa ser realizada. A preparação l
 não comprova publicação automática ativa.
 
 Veja `ATUALIZAR.md` para configuração da personalização e do catálogo.
+
+## Cupons
+
+A aba Cupons cadastra descontos percentuais ou em reais, com compra mínima,
+validade opcional e ativação. Execute `atualizacao-cupons.sql` uma vez no SQL Editor;
+o mesmo código está em Cupons > Ativar cupons no Supabase > Copiar SQL dos cupons.
+A migração preserva vendas anteriores e mantém o checkout sem cupom funcionando.
+
+Visitantes aplicam o código na sacola, antes do WhatsApp. O banco consulta preços,
+estoque disponível, validade e mínimo; o navegador não determina o desconto.
+O pedido não consome estoque nem cupom e continua sujeito à confirmação da loja.
+Ao confirmar no checkout administrativo, aplique o código recebido no WhatsApp.
+A venda registra subtotal original, desconto e código, calculando taxa e lucro
+após o desconto e preservando o custo integral dos produtos. Não há limite de
+usos por cliente, cumulatividade de cupons ou pagamento online nesta versão.
+
+Testes de sessão (sem dependências adicionais):
+
+```sh
+node --test tests/session.test.mjs
+```
+
+Para testar SQL em PostgreSQL/PGlite sem alterar o projeto Supabase real:
+
+```sh
+npm install --prefix /tmp/mhy-test-deps --cache /tmp/mhy-npm-cache @electric-sql/pglite@0.5.10
+NODE_PATH=/tmp/mhy-test-deps/node_modules node --test tests/coupons-db.test.cjs
+```
+
+O teste de SQL fica explicitamente marcado como skipped se PGlite não estiver
+instalado. Não interprete skipped como validação do banco.

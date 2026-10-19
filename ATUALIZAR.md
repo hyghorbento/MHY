@@ -38,3 +38,11 @@ isolamento RLS, campos públicos, catálogo desativado e ausência de acesso fin
 O login, CRUD, sincronização e venda da v1.1 foram confirmados pelo usuário no projeto real.
 A nova migração e a versão v2 ainda precisam ser executadas/publicadas pelo usuário;
 não houve acesso administrativo ao Supabase ou Netlify nesta tarefa.
+
+## v2.1 — cupons
+
+A nova aba Cupons contém o SQL de `atualizacao-cupons.sql` e seu botão de cópia.
+Execute esse SQL no projeto existente após a publicação do código. É uma migração
+complementar; não repita a configuração inicial e não apague tabelas.
+Cupons só passam a validar no projeto real depois dessa execução. As vendas sem
+cupom continuam usando a função anterior. Consulte README.md para testes e regras.
