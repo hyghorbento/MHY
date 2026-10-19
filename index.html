@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MHY • Gestão da loja • v1.1</title>
+<!-- Configuração pública: use somente a chave anon/publishable, nunca service_role. -->
+<script>
+const SUPABASE_URL = 'https://wnbftdqkfhvpiahaldbs.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_nbrbLSAGleV8xkrsmKAxUA_HHfRHow-';
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{color-scheme:dark;--gold:#D4AF37}body{margin:0;background:#0c0d10;color:#eeeef1;font-family:Inter,system-ui,sans-serif}button,input,select{font:inherit}button{cursor:pointer}button:disabled{opacity:.45;cursor:wait}button,.btn{border-radius:10px;padding:11px 17px;background:#26272d;color:#f5f5f5;border:1px solid #383940}button:hover{border-color:var(--gold)}.gold{background:var(--gold);color:#151207;border-color:var(--gold);font-weight:700}.panel{background:#15161b;border:1px solid #2a2b31;border-radius:18px;padding:22px}.muted{color:#9799a6}.label{display:block;font-size:13px;color:#b6b7c1;margin-bottom:7px}input,select{width:100%;background:#0e0f13;border:1px solid #383940;border-radius:9px;padding:11px;color:white}input:focus,select:focus{outline:2px solid #D4AF37}h1{font-size:28px;font-weight:650}h2{font-size:18px;font-weight:600}table{width:100%;border-collapse:collapse;white-space:nowrap}td,th{text-align:left;padding:15px 10px;border-bottom:1px solid #292a31}th{color:#9597a4;font-size:12px;text-transform:uppercase;letter-spacing:.08em}.thumb{width:46px;height:46px;object-fit:cover;border-radius:10px;background:#2b2920}.metric{font-size:27px;font-weight:650;margin-top:12px}.active{background:#D4AF371c;color:#D4AF37;border-color:#D4AF3766}.hidden{display:none!important}.badge{font-size:12px;padding:5px 9px;background:#D4AF371a;color:#D4AF37;border-radius:20px}dialog{background:#15161b;color:white;border:1px solid #444;border-radius:18px;width:min(580px,94vw);padding:24px}dialog::backdrop{background:#000b}#toast{position:fixed;bottom:24px;right:20px;max-width:90vw;z-index:100;background:#28262a;border:1px solid #D4AF37;padding:16px;border-radius:12px}nav{display:flex;gap:8px;flex-wrap:wrap}a{color:#D4AF37}small{color:#a2a4b0}summary{cursor:pointer;color:#D4AF37}pre{white-space:pre-wrap;word-break:break-word;font-size:12px}button:focus-visible{outline:2px solid #D4AF37;outline-offset:3px}
+/* Cabeçalho permanece acessível ao rolar janelas em telas pequenas. */
+dialog{max-height:calc(100dvh - 32px);overflow-y:auto;box-sizing:border-box;overscroll-behavior:contain}
+.dialog-header{position:sticky;top:-24px;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:16px;background:#15161b;padding:16px 0;margin-bottom:16px;border-bottom:1px solid #383940}
+.dialog-header h2{margin:0;min-width:0}
+.dialog-close{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-width:104px;min-height:48px;flex-shrink:0;background:#25262d;border:1px solid #D4AF37;color:#f4d978;position:relative;touch-action:manipulation}
+.dialog-close:hover{background:#3a321c}
+</style>
+</head>
+<body>
+<header class="border-b border-white/10 px-5 md:px-10 py-5 flex justify-between items-center gap-3 flex-wrap"><div class="flex items-center gap-3"><span class="gold rounded-xl p-3 font-bold">M</span><div><b class="text-xl tracking-widest">MHY<span class="text-[#D4AF37]">.</span></b><p class="text-xs muted">CONTROLE & RESULTADOS · v1.1</p></div></div><div class="flex items-center gap-3"><span id="connection" class="badge">Demonstração • dados temporários</span><button id="account">Conectar</button></div></header>
+<main class="max-w-7xl mx-auto px-4 md:px-10 py-8">
+<div class="flex justify-between gap-4 flex-wrap mb-7"><div><p class="muted text-sm mb-1">Sua loja, sob controle</p><h1 id="pageTitle">Visão geral</h1></div><nav aria-label="Módulos"><button data-tab="dashboard" class="active">Dashboard</button><button data-tab="inventory">Estoque</button><button data-tab="sales">Vendas</button><button data-tab="cash">Fluxo de caixa</button></nav></div>
+<p id="demoNotice" class="panel mb-6 text-sm muted">Explore com dados de exemplo. No modo demonstração, alterações ficam apenas nesta sessão. Configure o Supabase abaixo para sincronizar seus aparelhos.</p>
+<section id="dashboard"><div id="metrics" class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6"></div><div class="grid lg:grid-cols-2 gap-6"><div class="panel"><h2 class="mb-4">Vendas recentes <span class="badge">Todas as datas</span></h2><div id="recent"></div></div><div class="panel"><h2 class="mb-4">Atenção ao estoque</h2><div id="alerts"></div></div></div></section>
+<section id="inventory" class="hidden"><div class="flex gap-3 mb-5"><input id="search" placeholder="Buscar por nome ou SKU" aria-label="Buscar produtos"><button class="gold shrink-0" id="newProduct">+ Produto</button></div><div class="panel overflow-x-auto"><table><thead><tr><th>Produto</th><th>SKU</th><th>Custo</th><th>Venda</th><th>Estoque</th><th>Ações</th></tr></thead><tbody id="products"></tbody></table></div></section>
+<section id="sales" class="hidden"><div class="grid lg:grid-cols-2 gap-6"><div class="panel"><h2 class="mb-4">Adicionar à venda</h2><input id="saleSearch" placeholder="Buscar produto" aria-label="Buscar produto para venda"><div id="catalog" class="mt-4 space-y-3"></div></div><div class="panel"><h2>Sacola de vendas</h2><div id="cart" class="my-4"></div><div class="grid grid-cols-2 gap-3"><label><span class="label">Pagamento</span><select id="payment"><option value="pix">PIX à vista</option><option value="debit">Débito</option><option value="credit">Crédito</option></select></label><label><span class="label">Parcelas</span><select id="installments"></select></label></div><label class="flex items-center gap-3 my-5 cursor-pointer"><input id="passFee" type="checkbox" role="switch" class="!w-5 !h-5 accent-[#D4AF37]"><span>Repassar taxa <small class="block">Desligado: absorver taxa</small></span></label><div id="quote" class="space-y-3 border-t border-white/10 pt-4"></div><button id="checkout" class="gold w-full mt-6">Confirmar venda</button><p class="muted text-xs mt-3">Taxas totais sobre a venda. Valores arredondados em centavos; parcelas podem ter ajuste de R$ 0,01.</p></div></div></section>
+<section id="cash" class="hidden"><div class="panel mb-6"><h2 class="mb-4">Lançamento manual</h2><form id="cashForm" class="grid md:grid-cols-4 gap-3"><input name="description" placeholder="Descrição" aria-label="Descrição" required maxlength="150"><select name="kind" aria-label="Tipo"><option value="in">Entrada</option><option value="out">Saída / despesa</option></select><input name="amount" type="number" min="0.01" max="9999999" step="0.01" placeholder="Valor (R$)" aria-label="Valor" required><button class="gold">Registrar</button></form><p class="text-xs muted mt-3">Vendas geram entradas líquidas automaticamente. Custos dos produtos entram no lucro; despesas manuais também são descontadas. Compras de estoque devem ser lançadas como saídas.</p></div><div class="panel overflow-x-auto"><table><thead><tr><th>Data</th><th>Descrição</th><th>Tipo</th><th>Valor</th></tr></thead><tbody id="movements"></tbody></table></div></section>
+<details class="panel mt-8"><summary>Configuração do Supabase e instruções</summary><div class="mt-4 text-sm space-y-3"><p>1. Crie um projeto Supabase. No topo deste HTML, preencha SUPABASE_URL e SUPABASE_ANON_KEY com os dados públicos do projeto.</p><p>2. Execute o SQL abaixo no SQL Editor. Crie seu usuário em Authentication → Users. Entre com a mesma conta no PC e celular. As políticas isolam os dados por usuário.</p><p>3. Sirva este arquivo por HTTP local ou publique em hospedagem HTTPS. A sincronização usa Realtime e recarrega os dados ao retornar à aba. Fotos são comprimidas para JPEG de até 640 pixels e salvas em Base64 no banco.</p><form id="connectionForm" class="panel space-y-3"><h2>Conexão com o Supabase</h2><label><span class="label">Project URL</span><input id="projectURL" type="url" required placeholder="https://seu-projeto.supabase.co"></label><label><span class="label">Chave pública publishable ou anon</span><input id="projectKey" required autocomplete="off" placeholder="sb_publishable_…"></label><p class="muted">Use somente a chave pública. Não informe senha, chave secret ou service_role.</p><button class="gold">Salvar conexão e entrar</button></form><button id="copySQL">Copiar SQL completo</button><pre id="sqlText"></pre></div></details>
+</main>
+<dialog id="productDialog" aria-labelledby="productTitle"><form id="productForm"><div class="dialog-header"><h2 id="productTitle">Novo produto</h2><button class="dialog-close" type="button" data-close="productDialog" aria-label="Fechar cadastro de produto"><span aria-hidden="true">✕</span> Fechar</button></div><input type="hidden" name="id"><div class="grid grid-cols-2 gap-4"><label class="col-span-2"><span class="label">Nome</span><input name="name" required maxlength="120"></label><label class="col-span-2"><span class="label">Código / SKU</span><input name="sku" required maxlength="60"></label><label><span class="label">Preço de custo</span><input name="cost" type="number" min="0" max="9999999" step="0.01" required></label><label><span class="label">Preço de venda</span><input name="price" type="number" min="0.01" max="9999999" step="0.01" required></label><label><span class="label">Estoque atual</span><input name="stock" type="number" min="0" max="1000000" step="1" required></label><label><span class="label">Estoque mínimo</span><input name="minimum" type="number" min="0" max="1000000" step="1" required></label><div class="col-span-2"><span class="label">Foto do produto • máximo 12 MB</span><!-- Sem capture obrigatório: permite câmera ou galeria conforme o dispositivo. --><input id="photo" type="file" accept="image/*" aria-label="Escolher foto"><label class="block mt-3"><span class="label">Ou tirar foto com a câmera do celular</span><input id="camera" type="file" accept="image/*" capture="environment" aria-label="Tirar foto com a câmera"></label><div class="flex gap-3 mt-3 items-center"><img id="photoPreview" class="thumb" alt="Prévia do produto"><button id="removePhoto" type="button">Remover foto</button></div></div></div><button class="gold w-full mt-6" id="saveProduct">Salvar produto</button></form></dialog>
+<dialog id="loginDialog" aria-labelledby="loginTitle"><form id="loginForm" novalidate><div class="dialog-header"><h2 id="loginTitle">Acessar sua loja</h2><button class="dialog-close" type="button" data-close="loginDialog" aria-label="Fechar janela de acesso"><span aria-hidden="true">✕</span> Fechar</button></div><p class="muted text-sm mb-4">Use a mesma conta nos dois aparelhos.</p><label><span class="label">E-mail</span><input type="email" name="email" required autocomplete="username"></label><label class="block mt-4"><span class="label">Senha</span><input type="password" name="password" required autocomplete="current-password"></label><p id="loginFeedback" role="status" aria-live="polite" class="mt-4 text-sm" style="color:#D4AF37"></p><div class="flex gap-3 mt-5"><button class="gold" type="submit" id="loginSubmit">Entrar</button><button type="button" data-close="loginDialog">Cancelar</button></div></form></dialog>
+<div id="toast" role="status" class="hidden"></div>
+<script>
+'use strict';
+// Utilitários: escape impede injeção de HTML; dinheiro é calculado em centavos inteiros.
+const $ = id => document.getElementById(id);
+const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const money = cents => (cents/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const date = value => new Date(value).toLocaleString('pt-BR');
+const placeholder = 'data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#29271e"/><text x="32" y="40" text-anchor="middle" fill="#D4AF37" font-size="27">M</text></svg>');
+const thumb = p => `<img class="thumb" alt="${esc(p.name)}" src="${esc(/^data:image\/(jpeg|png|webp);base64,/.test(p.image||'')?p.image:placeholder)}">`;
+let toastTimer;
+function notify(message){$('toast').textContent=message;$('toast').classList.remove('hidden');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.add('hidden'),6500);}
+// Apenas configurações públicas ficam neste navegador; estoque continua no Supabase.
+// Prazo por requisição HTTP; AbortController encerra a tentativa pendente de rede.
+async function fetchWithTimeout(input,options={}){const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),20000);const signal=options.signal?AbortSignal.any([options.signal,controller.signal]):controller.signal;try{return await fetch(input,{...options,signal});}catch(error){if(controller.signal.aborted)throw Error('Tempo de conexão esgotado. Verifique sua internet ou abra o aplicativo em uma hospedagem HTTPS.');throw error;}finally{clearTimeout(timer);}}
+let savedConnection={};
+try{savedConnection=JSON.parse(localStorage.getItem('mhy-connection')||'{}');}catch{}
+let connectionURL=savedConnection.url||SUPABASE_URL;
+let connectionKey=savedConnection.key||SUPABASE_ANON_KEY;
+let configured=Boolean(connectionURL&&connectionKey);
+let db=configured&&window.supabase?window.supabase.createClient(connectionURL,connectionKey,{global:{fetch:fetchWithTimeout}}):null;
+let user=null,channel=null,photoData=null,cart=new Map(),checkoutKey=crypto.randomUUID(),loading=false;
+let products=[],sales=[],movements=[];
+// Demonstração em memória; nunca é apresentada como armazenamento sincronizado.
+const demoProducts=[{id:crypto.randomUUID(),name:'Perfume Signature',sku:'PRF-001',cost:6500,price:14990,stock:12,minimum:3,image:null},{id:crypto.randomUUID(),name:'Bolsa Essential',sku:'BLS-002',cost:9500,price:22990,stock:3,minimum:4,image:null},{id:crypto.randomUUID(),name:'Relógio Classic',sku:'REL-003',cost:12000,price:29990,stock:8,minimum:2,image:null}];
+function setDemo(){products=structuredClone(demoProducts);sales=[];movements=[];cart.clear();render();}
+// Taxas em pontos-base: 100 pontos = 1%. Parcelado usa taxa TOTAL, não por parcela.
+function rateFor(method,n){return method==='pix'?50:method==='debit'?99:n===1?299:n<=6?229:n<=12?269:299;}
+function quote(base,cost,method,n,pass){const rate=rateFor(method,n);let total=pass?Math.round(base*10000/(10000-rate)):base;const fee=Math.round(total*rate/10000);return {base,total,fee,net:total-fee,profit:total-fee-cost,rate,n};}
+function currentQuote(){let base=0,cost=0;for(const [id,qty] of cart){const p=products.find(p=>p.id===id);if(p){base+=p.price*qty;cost+=p.cost*qty;}}return quote(base,cost,$('payment').value,Number($('installments').value),$('passFee').checked);}
+function resetCheckoutKey(){checkoutKey=crypto.randomUUID();}
+function renderQuote(){const q=currentQuote();const part=Math.floor(q.total/q.n),extra=q.total%q.n;$('quote').innerHTML=[['Subtotal',money(q.base)],['Taxa total',`${(q.rate/100).toFixed(2)}% · ${money(q.fee)}`],['Total a cobrar',money(q.total)],['Parcelamento',`${q.n}x · ${extra?`${extra} de ${money(part+1)} e ${q.n-extra} de ${money(part)}`:money(part)}`],['Recebimento líquido',money(q.net)],['Lucro líquido da venda',money(q.profit)]].map(([label,value],i)=>`<div class="flex justify-between gap-3 ${i===5?'text-[#D4AF37] font-bold':''}"><span>${label}</span><strong>${value}</strong></div>`).join('');$('checkout').disabled=!cart.size||loading;}
+function renderCart(){$('cart').innerHTML=cart.size?[...cart].map(([id,qty])=>{const p=products.find(p=>p.id===id);return p?`<div class="flex items-center gap-3 py-3 border-b border-white/10">${thumb(p)}<div class="flex-1"><b>${esc(p.name)}</b><small class="block">${money(p.price)} × ${qty}</small></div><button data-minus="${id}" aria-label="Remover uma unidade">−</button><button data-plus="${id}" aria-label="Adicionar uma unidade">+</button></div>`:'';}).join(''):'<p class="muted py-6">Sua sacola está vazia.</p>';renderQuote();}
+function render(){
+const revenue=sales.reduce((s,v)=>s+v.total,0),profit=sales.reduce((s,v)=>s+v.profit,0)-movements.filter(m=>m.kind==='out').reduce((s,m)=>s+m.amount,0),incoming=movements.filter(m=>m.kind==='in').reduce((s,m)=>s+m.amount,0),outgoing=movements.filter(m=>m.kind==='out').reduce((s,m)=>s+m.amount,0);
+$('metrics').innerHTML=[['Faturamento bruto',money(revenue),'Vendas confirmadas'],['Lucro líquido',money(profit),'Após taxas, custos e despesas'],['Entradas / saídas',`${money(incoming)} / ${money(outgoing)}`,'Movimentações registradas'],['Saldo de caixa',money(incoming-outgoing),'Entradas menos saídas']].map(([a,b,c],i)=>`<div class="panel"><p class="muted text-sm">${a}</p><p class="metric ${i===1?'text-[#D4AF37]':''}" style="${i===2?'font-size:20px':''}">${b}</p><p class="muted text-xs mt-2">${c}</p></div>`).join('');
+$('recent').innerHTML=sales.slice(0,5).map(s=>`<div class="flex justify-between py-3 border-b border-white/10"><div>Venda · ${esc(({pix:'PIX',debit:'Débito',credit:'Crédito'})[s.method]||s.method)}<small class="block">${date(s.created_at)}</small></div><strong class="text-[#D4AF37]">${money(s.total)}</strong></div>`).join('')||'<p class="muted py-5">Nenhuma venda registrada ainda.</p>';
+$('alerts').innerHTML=products.filter(p=>p.stock<=p.minimum).map(p=>`<div class="flex items-center gap-3 py-3">${thumb(p)}<div class="flex-1">${esc(p.name)}<small class="block">Mínimo: ${p.minimum}</small></div><span class="badge">${p.stock} unidades</span></div>`).join('')||'<p class="muted py-5">Todos os produtos acima do estoque mínimo.</p>';
+const term=$('search').value.toLowerCase();$('products').innerHTML=products.filter(p=>(p.name+' '+p.sku).toLowerCase().includes(term)).map(p=>`<tr><td><div class="flex items-center gap-3">${thumb(p)}<b>${esc(p.name)}</b></div></td><td class="muted">${esc(p.sku)}</td><td>${money(p.cost)}</td><td>${money(p.price)}</td><td><span class="${p.stock<=p.minimum?'badge':''}">${p.stock} un.</span></td><td><button data-edit="${p.id}">Editar</button> <button data-delete="${p.id}" aria-label="Excluir ${esc(p.name)}">Excluir</button></td></tr>`).join('')||'<tr><td colspan="6" class="muted">Nenhum produto encontrado.</td></tr>';
+const st=$('saleSearch').value.toLowerCase();$('catalog').innerHTML=products.filter(p=>(p.name+' '+p.sku).toLowerCase().includes(st)).map(p=>`<div class="flex items-center gap-3 border-b border-white/10 py-3">${thumb(p)}<div class="flex-1"><b>${esc(p.name)}</b><small class="block">${money(p.price)} · ${p.stock} disponíveis</small></div><button data-plus="${p.id}" ${p.stock<1?'disabled':''}>Adicionar</button></div>`).join('')||'<p class="muted">Cadastre um produto para vender.</p>';
+$('movements').innerHTML=movements.map(m=>`<tr><td>${date(m.created_at)}</td><td>${esc(m.description)}</td><td>${m.kind==='in'?'Entrada':'Saída'}</td><td class="${m.kind==='in'?'text-[#D4AF37]':''}">${m.kind==='in'?'+':'−'} ${money(m.amount)}</td></tr>`).join('')||'<tr><td colspan="4" class="muted">Nenhum lançamento.</td></tr>';renderCart();}
+// CRUD oficial Supabase; erros são exibidos e nunca transformados em falso sucesso.
+async function fetchAll(table){let all=[];for(let offset=0;;offset+=500){const {data,error}=await db.from(table).select('*').order('id').range(offset,offset+499);if(error)throw error;all.push(...data);if(data.length<500)return all;}}
+async function load(){if(!user)return;[products,sales,movements]=await Promise.all(['products','sales','movements'].map(fetchAll));products.sort((a,b)=>a.name.localeCompare(b.name));sales.sort((a,b)=>b.created_at.localeCompare(a.created_at));movements.sort((a,b)=>b.created_at.localeCompare(a.created_at));for(const id of cart.keys())if(!products.some(p=>p.id===id))cart.delete(id);render();}
+async function saveProduct(data){if(user){const {error}=data.id?await db.from('products').update(data).eq('id',data.id):await db.from('products').insert({...data,user_id:user.id});if(error)throw error;await load();}else{const i=products.findIndex(p=>p.id===data.id);if(i>=0)products[i]=data;else products.push({...data,id:crypto.randomUUID()});render();}}
+async function deleteProduct(id){if(!confirm('Excluir este produto? O histórico de vendas será preservado.'))return;if(user){const {error}=await db.from('products').delete().eq('id',id);if(error)throw error;await load();}else{products=products.filter(p=>p.id!==id);cart.delete(id);render();}}
+// Redimensiona localmente antes de persistir. JPEG remove metadados e reduz o tráfego.
+async function compressImage(file){if(!file.type.startsWith('image/'))throw Error('Selecione uma imagem.');if(file.size>12*1024*1024)throw Error('A imagem deve ter no máximo 12 MB.');const url=URL.createObjectURL(file);try{const img=new Image();img.src=url;await img.decode();const scale=Math.min(1,640/Math.max(img.width,img.height));const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.width*scale));canvas.height=Math.max(1,Math.round(img.height*scale));const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);const result=canvas.toDataURL('image/jpeg',.72);if(result.length>900000)throw Error('Imagem muito complexa. Escolha uma foto menor.');return result;}finally{URL.revokeObjectURL(url);}}
+function editProduct(id){const form=$('productForm');form.reset();const p=products.find(p=>p.id===id);for(const k of ['id','name','sku','cost','price','stock','minimum'])form.elements[k].value=p?(['cost','price'].includes(k)?p[k]/100:p[k]):(['stock','minimum','cost'].includes(k)?0:'');photoData=p?.image||null;$('photoPreview').src=photoData||placeholder;$('productTitle').textContent=p?'Editar produto':'Novo produto';$('productDialog').showModal();}
+$('camera').onchange=$('photo').onchange=async e=>{if(!e.target.files[0])return;$('saveProduct').disabled=true;try{photoData=await compressImage(e.target.files[0]);$('photoPreview').src=photoData;}catch(e){notify(e.message);}finally{$('saveProduct').disabled=false;}};
+$('removePhoto').onclick=()=>{photoData=null;$('photo').value='';$('camera').value='';$('photoPreview').src=placeholder;};
+$('productForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);const p={name:f.get('name').trim(),sku:f.get('sku').trim(),cost:Math.round(Number(f.get('cost'))*100),price:Math.round(Number(f.get('price'))*100),stock:Number(f.get('stock')),minimum:Number(f.get('minimum')),image:photoData};if(f.get('id'))p.id=f.get('id');if(!p.name||!p.sku)return notify('Preencha nome e SKU.');if(products.some(x=>x.sku===p.sku&&x.id!==p.id))return notify('Este SKU já existe.');$('saveProduct').disabled=true;try{await saveProduct(p);$('productDialog').close();notify('Produto salvo.');}catch(e){notify(e.message);}finally{$('saveProduct').disabled=false;}};
+// Delegação mantém botões funcionais após atualizações em tempo real.
+document.addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;try{if(b.dataset.tab){document.querySelectorAll('section').forEach(s=>s.classList.toggle('hidden',s.id!==b.dataset.tab));document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));$('pageTitle').textContent={dashboard:'Visão geral',inventory:'Estoque de produtos',sales:'Nova venda',cash:'Fluxo de caixa'}[b.dataset.tab];}if(b.dataset.close)$(b.dataset.close).close();if(b.dataset.edit)editProduct(b.dataset.edit);if(b.dataset.delete)await deleteProduct(b.dataset.delete);if(b.dataset.plus&&!loading){const p=products.find(p=>p.id===b.dataset.plus),qty=cart.get(p.id)||0;if(qty>=p.stock)return notify('Quantidade indisponível em estoque.');cart.set(p.id,qty+1);resetCheckoutKey();renderCart();}if(b.dataset.minus&&!loading){const id=b.dataset.minus,n=cart.get(id)-1;if(n>0)cart.set(id,n);else cart.delete(id);resetCheckoutKey();renderCart();}}catch(e){notify(e.message);}});
+$('newProduct').onclick=()=>editProduct();$('search').oninput=render;$('saleSearch').oninput=render;
+function paymentChanged(){const credit=$('payment').value==='credit';$('installments').innerHTML=Array.from({length:credit?18:1},(_,i)=>`<option value="${i+1}">${i+1}x${i===0?' à vista':''}</option>`).join('');$('installments').disabled=!credit;resetCheckoutKey();renderQuote();}
+$('payment').onchange=paymentChanged;$('installments').onchange=$('passFee').onchange=()=>{resetCheckoutKey();renderQuote();};
+$('checkout').onclick=async()=>{if(loading||!cart.size)return;loading=true;renderQuote();try{const q=currentQuote();if(!Number.isSafeInteger(q.base)||q.base>1000000000000)throw Error('Valor da venda excede o limite permitido.');if(user){const {error}=await db.rpc('checkout',{items:[...cart].map(([id,qty])=>({id,qty})),payment:$('payment').value,parts:q.n,pass_fee:$('passFee').checked,request_id:checkoutKey});if(error)throw error;cart.clear();resetCheckoutKey();await load();}else{for(const [id,qty]of cart){const p=products.find(p=>p.id===id);if(!p||p.stock<qty)throw Error('Estoque insuficiente.');}for(const [id,qty]of cart)products.find(p=>p.id===id).stock-=qty;const created_at=new Date().toISOString();sales.unshift({...q,id:checkoutKey,method:$('payment').value,created_at});movements.unshift({id:crypto.randomUUID(),kind:'in',description:'Venda (recebimento líquido)',amount:q.net,created_at});cart.clear();resetCheckoutKey();render();}notify('Venda confirmada e estoque atualizado.');}catch(e){notify(e.message);}finally{loading=false;renderQuote();}};
+$('cashForm').onsubmit=async e=>{e.preventDefault();const button=e.submitter;button.disabled=true;try{const f=new FormData(e.target),data={description:f.get('description').trim(),kind:f.get('kind'),amount:Math.round(Number(f.get('amount'))*100)};if(!data.description||data.amount<=0)throw Error('Informe descrição e valor válido.');if(user){const {error}=await db.from('movements').insert({...data,user_id:user.id});if(error)throw error;await load();}else{movements.unshift({...data,id:crypto.randomUUID(),created_at:new Date().toISOString()});render();}e.target.reset();notify('Lançamento registrado.');}catch(e){notify(e.message);}finally{button.disabled=false;}};
+function openConnectionSettings(){const form=$('connectionForm');form.closest('details').open=true;form.scrollIntoView({behavior:'smooth',block:'center'});notify(configured?'A biblioteca Supabase não carregou. Verifique sua conexão e recarregue a página.':'Preencha o endereço e a chave pública nos campos de conexão.');}
+$('projectURL').value=connectionURL;$('projectKey').value=connectionKey;
+$('connectionForm').onsubmit=async e=>{e.preventDefault();const url=$('projectURL').value.trim(),key=$('projectKey').value.trim();try{const parsed=new URL(url);if(parsed.protocol!=='https:'||!parsed.hostname.endsWith('.supabase.co')||parsed.pathname!=='/'||parsed.search||parsed.hash)throw Error('Use o Project URL HTTPS do Supabase, sem caminhos adicionais.');if(!key.startsWith('sb_publishable_')&&!key.startsWith('eyJ'))throw Error('Informe a chave pública publishable ou anon.');if(key.startsWith('eyJ')){let payload;try{payload=JSON.parse(atob(key.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));}catch{throw Error('Chave anon inválida.');}if(payload.role!=='anon')throw Error('Use somente a chave anon pública.');}if(!window.supabase)throw Error('A biblioteca Supabase não carregou. Verifique a conexão e recarregue a página.');if(channel)await db.removeChannel(channel);if(db)await db.auth.signOut();connectionURL=parsed.origin;connectionKey=key;configured=true;db=window.supabase.createClient(connectionURL,connectionKey,{global:{fetch:fetchWithTimeout}});try{localStorage.setItem('mhy-connection',JSON.stringify({url:connectionURL,key:connectionKey}));}catch{notify('Conexão configurada nesta sessão; navegador não permitiu salvar a preferência.');}db.auth.onAuthStateChange((_event,session)=>setTimeout(()=>applySession(session).catch(e=>notify(e.message)),0));$('connection').textContent='Supabase • entre na sua conta';$('loginDialog').showModal();}catch(error){notify(error.message);}};
+$('account').onclick=async()=>{if(user){const {error}=await db.auth.signOut();if(error)notify(error.message);}else if(!db)openConnectionSettings();else $('loginDialog').showModal();};
+// Feedback dentro do dialog: mensagens externas ficam atrás da camada modal nativa.
+$('loginForm').onsubmit=async e=>{e.preventDefault();const button=$('loginSubmit');if(button.disabled)return;const emailInput=e.target.elements.email,passwordInput=e.target.elements.password;emailInput.value=emailInput.value.trim();if(!emailInput.validity.valid){$('loginFeedback').textContent='Informe um e-mail válido para entrar.';emailInput.focus();return;}if(!passwordInput.value){$('loginFeedback').textContent='Informe sua senha para entrar.';passwordInput.focus();return;}button.disabled=true;button.textContent='Entrando…';const feedback=$('loginFeedback');feedback.textContent='Verificando seu acesso…';const slow=setTimeout(()=>{feedback.textContent='A conexão está demorando. Verifique sua internet. Se estiver usando a prévia desta conversa, tente o arquivo publicado em uma hospedagem HTTPS.';},15000);try{if(!db)throw Error('Configure a conexão com o Supabase antes de entrar.');const f=new FormData(e.target);const {data,error}=await db.auth.signInWithPassword({email:String(f.get('email')).trim(),password:f.get('password')});if(error)throw error;if(!data.session)throw Error('Não foi possível iniciar a sessão.');feedback.textContent='Acesso confirmado.';$('loginDialog').close();e.target.reset();}catch(error){const message=error.message||'Não foi possível entrar.';feedback.textContent=/invalid login credentials/i.test(message)?'E-mail ou senha incorretos. Use a conta criada em Supabase → Authentication → Users; ela pode ser diferente do seu login no painel Supabase.':/email not confirmed/i.test(message)?'Seu e-mail ainda não foi confirmado. Confirme o e-mail ou verifique o usuário em Authentication → Users.':/failed to fetch|network|load failed/i.test(message)?'Não foi possível alcançar o Supabase. Verifique a internet e se a prévia permite acesso ao projeto.':/invalid api key|invalid.*key/i.test(message)?'A chave pública não foi aceita. Confira se a URL e a chave pertencem ao mesmo projeto.':message;}finally{clearTimeout(slow);button.disabled=false;button.textContent='Entrar';}};
+async function applySession(session){user=session?.user||null;if(channel){await db.removeChannel(channel);channel=null;}cart.clear();resetCheckoutKey();$('connection').textContent=user?'Supabase • conectando':configured?'Supabase • entre na sua conta':'Demonstração • dados temporários';$('account').textContent=user?'Sair':'Conectar';$('demoNotice').classList.toggle('hidden',Boolean(user));if(!user){setDemo();return;}products=[];sales=[];movements=[];render();try{await load();$('connection').textContent='Supabase • conectado';channel=db.channel('store-'+user.id).on('postgres_changes',{event:'*',schema:'public',filter:'user_id=eq.'+user.id},()=>load().catch(e=>notify(e.message))).subscribe(status=>{if(status==='SUBSCRIBED')$('connection').textContent='Supabase • tempo real';if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status))$('connection').textContent='Conectado • tempo real indisponível';});}catch(e){$('connection').textContent='Erro na conexão';notify(e.message);}}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&user)load().catch(e=>notify(e.message));});
+// SQL incluído no próprio arquivo: executado uma vez no painel do seu projeto.
+const setupSQL = `
+-- Estrutura monetária em centavos. Dados acessíveis somente ao dono autenticado.
+create table if not exists public.products (
+ id uuid primary key default gen_random_uuid(),
+ user_id uuid not null default auth.uid() references auth.users(id),
+ name text not null check(length(trim(name)) between 1 and 120),
+ sku text not null check(length(trim(sku)) between 1 and 60),
+ cost bigint not null check(cost between 0 and 999999900),
+ price bigint not null check(price between 1 and 999999900),
+ stock integer not null check(stock between 0 and 1000000),
+ minimum integer not null check(minimum between 0 and 1000000),
+ image text check(image is null or (length(image)<=900000 and image like 'data:image/jpeg;base64,%')),
+ created_at timestamptz not null default now(), unique(user_id,sku)
+);
+create table if not exists public.sales (
+ id uuid primary key, user_id uuid not null references auth.users(id),
+ method text not null, installments integer not null,
+ base bigint not null, total bigint not null, fee bigint not null,
+ net bigint not null, profit bigint not null, items jsonb not null,
+ created_at timestamptz not null default now()
+);
+create table if not exists public.movements (
+ id uuid primary key default gen_random_uuid(),
+ user_id uuid not null default auth.uid() references auth.users(id),
+ kind text not null check(kind in ('in','out')),
+ description text not null check(length(trim(description)) between 1 and 150),
+ amount bigint not null check(amount between 0 and 999999999999999),
+ sale_id uuid unique references public.sales(id),
+ created_at timestamptz not null default now()
+);
+alter table public.products enable row level security;
+alter table public.sales enable row level security;
+alter table public.movements enable row level security;
+drop policy if exists products_owner on public.products;
+create policy products_owner on public.products for all to authenticated
+ using(user_id=auth.uid()) with check(user_id=auth.uid());
+drop policy if exists sales_read on public.sales;
+create policy sales_read on public.sales for select to authenticated using(user_id=auth.uid());
+drop policy if exists movements_read on public.movements;
+create policy movements_read on public.movements for select to authenticated using(user_id=auth.uid());
+drop policy if exists movements_insert on public.movements;
+create policy movements_insert on public.movements for insert to authenticated
+ with check(user_id=auth.uid() and sale_id is null and amount>0);
+revoke all on public.products,public.sales,public.movements from anon;
+revoke all on public.products,public.sales,public.movements from authenticated;
+grant select,insert,update,delete on public.products to authenticated;
+grant select on public.sales to authenticated;
+grant select,insert on public.movements to authenticated;
+create index if not exists sales_owner_date on public.sales(user_id,created_at desc);
+create index if not exists movements_owner_date on public.movements(user_id,created_at desc);
+
+-- Transação atômica: bloqueia produtos em ordem estável, calcula taxas no servidor,
+-- baixa estoque e registra venda/entrada. Repetir o mesmo request_id não duplica venda.
+create or replace function public.checkout(items jsonb,payment text,parts integer,pass_fee boolean,request_id uuid)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare
+ uid uuid := auth.uid(); line record; product public.products%rowtype;
+ subtotal bigint := 0; costs bigint := 0; basis integer;
+ charged bigint; fee_value bigint; snapshot jsonb := '[]'::jsonb;
+begin
+ if uid is null then raise exception 'Autenticação necessária'; end if;
+ if request_id is null or pass_fee is null then raise exception 'Pedido inválido'; end if;
+ perform pg_advisory_xact_lock(hashtextextended(request_id::text,0));
+ if exists(select 1 from public.sales where id=request_id and user_id=uid) then return request_id; end if;
+ if payment is null or parts is null or payment not in ('pix','debit','credit') or parts not between 1 and 18
+ or (payment<>'credit' and parts<>1) then raise exception 'Pagamento inválido'; end if;
+ if items is null or jsonb_typeof(items)<>'array' then raise exception 'Sacola inválida'; end if;
+ if jsonb_array_length(items) not between 1 and 100 then raise exception 'Sacola deve ter 1 a 100 produtos'; end if;
+ if exists(select 1 from jsonb_array_elements(items) x where
+    not (x ? 'id' and x ? 'qty') or jsonb_typeof(x->'qty')<>'number'
+    or (x->>'qty') !~ '^[1-9][0-9]{0,6}$') then raise exception 'Quantidade inválida'; end if;
+ if (select count(*) from jsonb_array_elements(items)) <>
+    (select count(distinct x->>'id') from jsonb_array_elements(items) x)
+ then raise exception 'Produto duplicado'; end if;
+ for line in select (x->>'id')::uuid as id,(x->>'qty')::integer as qty
+   from jsonb_array_elements(items) x order by (x->>'id')::uuid loop
+   select * into product from public.products where id=line.id and user_id=uid for update;
+   if not found then raise exception 'Produto não encontrado'; end if;
+   if product.stock<line.qty then raise exception 'Estoque insuficiente para %',product.name; end if;
+   subtotal := subtotal+product.price*line.qty;
+   costs := costs+product.cost*line.qty;
+   snapshot := snapshot || jsonb_build_array(jsonb_build_object('id',product.id,'name',product.name,
+      'sku',product.sku,'qty',line.qty,'price',product.price,'cost',product.cost));
+   update public.products set stock=stock-line.qty where id=product.id;
+ end loop;
+ if subtotal>1000000000000 then raise exception 'Valor da venda excede o limite permitido'; end if;
+ basis := case when payment='pix' then 50 when payment='debit' then 99
+   when parts=1 then 299 when parts<=6 then 229 when parts<=12 then 269 else 299 end;
+ charged := case when pass_fee then round(subtotal::numeric*10000/(10000-basis))::bigint else subtotal end;
+ fee_value := round(charged::numeric*basis/10000)::bigint;
+ insert into public.sales(id,user_id,method,installments,base,total,fee,net,profit,items)
+ values(request_id,uid,payment,parts,subtotal,charged,fee_value,charged-fee_value,charged-fee_value-costs,snapshot);
+ insert into public.movements(user_id,kind,description,amount,sale_id)
+ values(uid,'in','Venda (recebimento líquido)',charged-fee_value,request_id);
+ return request_id;
+end; $$;
+revoke all on function public.checkout(jsonb,text,integer,boolean,uuid) from public,anon;
+grant execute on function public.checkout(jsonb,text,integer,boolean,uuid) to authenticated;
+
+-- Publicação idempotente para sincronização Realtime entre aparelhos.
+do $$ declare t text; begin
+ foreach t in array array['products','sales','movements'] loop
+  if not exists(select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename=t) then
+   execute format('alter publication supabase_realtime add table public.%I',t);
+  end if;
+ end loop;
+end $$;
+`;
+$('sqlText').textContent=setupSQL;
+$('copySQL').onclick=async()=>{try{await navigator.clipboard.writeText(setupSQL);notify('SQL copiado.');}catch{notify('Selecione e copie o SQL exibido abaixo.');}};
+paymentChanged();setDemo();
+// Callback fora da operação de autenticação evita bloquear a fila interna do SDK.
+if(db){db.auth.onAuthStateChange((_event,session)=>{setTimeout(()=>applySession(session).catch(e=>notify(e.message)),0);});}
+else if(configured)notify('Não foi possível carregar a biblioteca Supabase. Verifique sua conexão.');
+</script>
+<!-- MHY v2: personalização e catálogo público. Inserir antes de </body>. -->
+<style>
+:root{--brand:#D4AF37;--brand-ink:#151207;--store-bg:#0c0d10}
+body{background:var(--store-bg)}
+.gold{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
+.active{background:color-mix(in srgb,var(--brand) 12%,transparent);border-color:var(--brand);color:var(--brand)}
+.badge{background:color-mix(in srgb,var(--brand) 10%,transparent);color:var(--brand)}
+a,summary{color:var(--brand)}
+button:hover{border-color:var(--brand)}
+input:focus,select:focus,textarea:focus{outline-color:var(--brand)}
+textarea{width:100%;padding:11px;border:1px solid #383940;border-radius:9px;background:#0e0f13;color:#fff;resize:vertical}
+.brand-logo{width:52px;height:52px;object-fit:contain;border-radius:12px;background:#fff;padding:4px}
+.brand-preview{width:100%;max-height:190px;object-fit:cover;border-radius:12px;background:#24252b}
+.settings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));gap:20px}
+.check-line{display:flex;align-items:center;gap:10px;cursor:pointer}
+.check-line input{width:20px;height:20px;accent-color:var(--brand)}
+.catalog-mode>header,.catalog-mode>main,.catalog-mode>dialog:not(#catalogCartDialog){display:none!important}
+#storefrontRoot{max-width:1200px;margin:auto;padding:20px 20px 130px}
+.store-header{display:flex;align-items:center;gap:14px;margin-bottom:24px}
+.store-hero{position:relative;isolation:isolate;overflow:hidden;min-height:240px;display:flex;align-items:center;border:1px solid #34353b;border-radius:24px;margin-bottom:24px;background:linear-gradient(120deg,#28251c,#17181d)}
+.store-hero>img{position:absolute;inset:0;z-index:-2;width:100%;height:100%;object-fit:cover}
+.store-hero:after{content:'';position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,#000d,#0005)}
+.store-hero>div{padding:34px;max-width:650px}
+.store-hero h1{font-size:clamp(28px,5vw,44px);line-height:1.15;margin:10px 0}
+.store-hero p{color:#ddd;line-height:1.6;white-space:pre-line}
+.store-filters{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+.store-filters input{flex:2;min-width:180px}.store-filters select{flex:1;min-width:160px}
+.store-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));gap:20px}
+.store-card{overflow:hidden;border:1px solid #303139;border-radius:18px;background:#15161b;display:flex;flex-direction:column}
+.store-card>img{width:100%;height:230px;object-fit:contain;background:#202127;padding:14px}
+.store-card-content{padding:20px;display:flex;flex-direction:column;gap:10px;flex:1}
+.store-card h2{overflow-wrap:anywhere}.store-card p{color:#aaa;white-space:pre-line;font-size:14px;overflow-wrap:anywhere}
+.store-card .store-price{font-size:23px;color:var(--brand);font-weight:700}
+.store-card button{margin-top:auto}.store-card button:disabled{cursor:not-allowed}
+.store-dock{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);width:min(640px,calc(100% - 32px));padding:15px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px;background:#1b1c22f5;border:1px solid var(--brand);border-radius:16px;z-index:10;box-shadow:0 10px 35px #0008}
+.store-dock small{display:block}.store-dock button{flex-shrink:0}
+.public-status{padding:50px 20px;text-align:center;max-width:650px;margin:40px auto}
+.catalog-note{color:#a2a4b0;font-size:13px;line-height:1.6}
+#catalogCartDialog .dialog-header{position:static}
+#catalogFeedback{white-space:pre-line;color:var(--brand)}
+#catalogLink{font-size:13px;overflow-wrap:anywhere}
+.version-label{font-size:11px;color:var(--brand);margin-left:5px}
+@media(max-width:420px){#storefrontRoot{padding:16px 16px 140px}.store-hero>div{padding:24px}.store-dock{padding:12px}.store-dock button{padding:10px}.store-card>img{height:240px}}
+</style>
+<script>
+// Extensão isolada: reutiliza o CRUD e as taxas existentes, sem substituir o banco.
+(() => {
+  if(window.__MHY_BRANDING_V2__)return;
+  window.__MHY_BRANDING_V2__=true;
+  const storeId = new URLSearchParams(location.search).get('loja');
+  const publicMode = storeId !== null;
+  const defaults = {
+    name:'MHY IMPORTS',tagline:'Escolhas especiais para o seu dia a dia.',
+    headline:'Encontre seu próximo favorito.',whatsapp:'5541995492589',accent:'#D4AF37',
+    background:'#0c0d10',logo:null,banner:null,published:false
+  };
+  let settings={...defaults},media={logo:null,banner:null},dirty=false;
+  let settingsAvailable=true,settingsSaveBusy=false;
+  let publicSettings=null,publicProducts=[],publicCart=new Map();
+  let publicClient=null,publicBusy=false,publicReady=false;
+  let publicRefreshTimer=null,publicCartDialog=null,publicRefreshPromise=null;
+  const validId=value=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value||'');
+  const imageSource=value=>/^data:image\/jpeg;base64,/.test(value||'')?value:null;
+  const safeColor=(value,fallback)=>/^#[0-9a-f]{6}$/i.test(value||'')?value:fallback;
+  function contrastText(hex){const c=hex.slice(1).match(/../g).map(n=>parseInt(n,16));return c[0]*.299+c[1]*.587+c[2]*.114>155?'#151207':'#fff';}
+  function applyBrand(value){
+    const accent=safeColor(value.accent,defaults.accent),background=safeColor(value.background,defaults.background);
+    document.documentElement.style.setProperty('--brand',accent);
+    document.documentElement.style.setProperty('--gold',accent);
+    document.documentElement.style.setProperty('--brand-ink',contrastText(accent));
+    document.documentElement.style.setProperty('--store-bg',background);
+    document.querySelectorAll('[class~="text-[#D4AF37]"]').forEach(el=>el.style.color=accent);
+    if(!publicMode){const brand=document.querySelector('body>header>div');if(brand){brand.innerHTML=`${imageSource(value.logo)?`<img class="brand-logo" src="${esc(value.logo)}" alt="Logo de ${esc(value.name)}">`:'<span class="gold rounded-xl p-3 font-bold">M</span>'}<div><b class="text-xl tracking-widest">${esc(value.name)}</b><p class="text-xs muted">CONTROLE & RESULTADOS · v2.0</p></div>`;}}
+    document.title=publicMode?`${value.name} • Catálogo`:`${value.name} • Gestão • v2.0`;
+  }
+  // A migração é complementar. Nenhuma tabela de vendas ou movimentações é apagada.
+  const catalogSQL=`
+begin;
+alter table public.products add column if not exists online boolean not null default false;
+alter table public.products add column if not exists category text not null default '';
+alter table public.products add column if not exists description text not null default '';
+create index if not exists products_public_catalog on public.products(user_id,online,id);
+create table if not exists public.store_settings(
+ user_id uuid primary key default auth.uid() references auth.users(id),
+ name text not null default 'MHY IMPORTS' check(length(trim(name)) between 1 and 100),
+ tagline text not null default '' check(length(tagline)<=300),
+ headline text not null default '' check(length(headline)<=160),
+ whatsapp text not null default '' check(whatsapp='' or whatsapp ~ '^[1-9][0-9]{9,14}$'),
+ accent text not null default '#D4AF37' check(accent ~ '^#[0-9A-Fa-f]{6}$'),
+ background text not null default '#0c0d10' check(background in ('#0c0d10','#111827','#171717')),
+ logo text check(logo is null or (length(logo)<=500000 and logo like 'data:image/jpeg;base64,%')),
+ banner text check(banner is null or (length(banner)<=1800000 and banner like 'data:image/jpeg;base64,%')),
+ published boolean not null default false
+);
+alter table public.store_settings enable row level security;
+drop policy if exists store_owner on public.store_settings;
+create policy store_owner on public.store_settings for all to authenticated
+ using(user_id=auth.uid()) with check(user_id=auth.uid());
+revoke all on public.store_settings from public,anon,authenticated;
+grant select,insert,update,delete on public.store_settings to authenticated;
+
+-- Catálogo só recebe os campos abaixo; custo e finanças não são concedidos ao visitante.
+create or replace function public.get_storefront(store uuid)
+returns table(name text,tagline text,headline text,whatsapp text,accent text,background text,logo text,banner text)
+language sql stable security definer set search_path=public
+as $$
+ select s.name,s.tagline,s.headline,s.whatsapp,s.accent,s.background,s.logo,s.banner
+ from public.store_settings s where s.user_id=store and s.published=true;
+$$;
+create or replace function public.get_catalog_products(store uuid,page_number integer default 0)
+returns table(id uuid,name text,sku text,price bigint,image text,available boolean,category text,description text)
+language sql stable security definer set search_path=public
+as $$
+ select p.id,p.name,p.sku,p.price,p.image,(p.stock>0),left(p.category,60),left(p.description,1000)
+ from public.products p join public.store_settings s on s.user_id=p.user_id
+ where s.user_id=store and s.published=true and p.online=true
+ order by p.id limit 100 offset (greatest(0,least(coalesce(page_number,0),10000))*100);
+$$;
+revoke all on function public.get_storefront(uuid) from public,anon,authenticated;
+revoke all on function public.get_catalog_products(uuid,integer) from public,anon,authenticated;
+grant execute on function public.get_storefront(uuid) to anon,authenticated;
+grant execute on function public.get_catalog_products(uuid,integer) to anon,authenticated;
+do $$ begin
+ if not exists(select 1 from pg_publication_tables where pubname='supabase_realtime' and schemaname='public' and tablename='store_settings') then
+  alter publication supabase_realtime add table public.store_settings;
+ end if;
+end $$;
+commit;
+`;
+  if(!publicMode){
+    const nav=document.querySelector('nav');
+    nav.insertAdjacentHTML('beforeend','<button data-tab="personalization">Personalizar</button>');
+    $('demoNotice').insertAdjacentHTML('beforebegin','<p class="muted text-xs mb-4">MHY v2.0 · Personalização e catálogo</p>');
+    const panel=document.createElement('section');panel.id='personalization';panel.className='hidden';
+    panel.innerHTML=`<form id="brandForm" class="space-y-5">
+      <div class="panel"><h2>Identidade da sua loja</h2><p class="muted text-sm mt-2">Logo, cores e banners ficam salvos no Supabase e são usados no PC, no celular e no catálogo. Você controla quando publicar.</p></div>
+      <p id="brandFeedback" role="status" class="panel hidden"></p>
+      <div class="settings-grid">
+       <div class="panel space-y-4"><h2>Marca e contato</h2>
+        <label class="block"><span class="label">Nome da loja</span><input name="storeName" maxlength="100" required></label>
+        <label class="block"><span class="label">Título do banner</span><input name="headline" maxlength="160"></label>
+        <label class="block"><span class="label">Mensagem para seus clientes</span><textarea name="tagline" maxlength="300" rows="3"></textarea></label>
+        <label class="block"><span class="label">WhatsApp para pedidos • com país e DDD</span><input name="whatsapp" type="tel" placeholder="55 + DDD + número" maxlength="25"><small>Somente números. Exemplo de formato: 5511999999999.</small></label>
+        <label class="block"><span class="label">Cor de destaque</span><input name="accent" type="color" class="!h-12"></label>
+        <label class="block"><span class="label">Fundo</span><select name="background"><option value="#0c0d10">Preto grafite</option><option value="#111827">Azul escuro</option><option value="#171717">Grafite</option></select></label>
+       </div>
+       <div class="panel space-y-4"><h2>Imagens da loja</h2>
+        <label class="block"><span class="label">Logo • até 12 MB</span><input id="brandLogo" type="file" accept="image/*"></label>
+        <img id="brandLogoPreview" class="brand-logo" alt="Prévia da logo"><button type="button" data-clear-brand="logo">Remover logo</button>
+        <label class="block"><span class="label">Banner • até 12 MB</span><input id="brandBanner" type="file" accept="image/*"><small>Prefira uma imagem horizontal. A foto será comprimida antes de salvar.</small></label>
+        <img id="brandBannerPreview" class="brand-preview" alt="Prévia do banner"><button type="button" data-clear-brand="banner">Remover banner</button>
+        <p class="catalog-note">As imagens e os textos do catálogo ficam públicos quando você o ativa.</p>
+       </div>
+      </div>
+      <div class="panel space-y-4"><h2>Catálogo para clientes</h2>
+       <label class="check-line"><input name="published" type="checkbox"><span>Ativar catálogo público</span></label>
+       <p class="catalog-note">Somente produtos marcados com “Exibir no catálogo” aparecem. Pedidos pelo WhatsApp não reservam estoque e não confirmam vendas automaticamente.</p>
+       <p id="catalogLink" class="muted">Entre na sua conta para gerar o link da loja.</p>
+       <div class="flex gap-3 flex-wrap"><button type="button" id="copyCatalogLink">Copiar link</button><button type="button" id="openCatalogLink">Abrir catálogo</button></div>
+      </div>
+      <div class="flex gap-3 flex-wrap"><button class="gold" id="saveBrand">Salvar personalização</button><button type="button" id="resetBrand">Descartar alterações</button></div>
+     </form>
+     <details class="panel mt-6" open><summary>Ativar a nova estrutura no Supabase • uma vez</summary><p class="muted text-sm my-4">Copie este SQL complementar e execute no SQL Editor do seu projeto. Ele adiciona personalização e protege o acesso público. Produtos existentes continuam privados até você escolher exibi-los.</p><button type="button" id="copyCatalogSQL">Copiar SQL complementar</button><pre id="catalogSQL" class="mt-4"></pre></details>`;
+    document.querySelector('main>details').before(panel);
+    $('catalogSQL').textContent=catalogSQL;
+    $('copyCatalogSQL').onclick=async()=>{try{await navigator.clipboard.writeText(catalogSQL);notify('SQL complementar copiado.');}catch{notify('Selecione e copie o SQL exibido abaixo.');}};
+    // Acrescenta dados públicos opcionais sem alterar os campos já existentes.
+    $('productForm').querySelector('.grid').insertAdjacentHTML('beforeend',`<label class="col-span-2"><span class="label">Categoria • opcional</span><input name="category" maxlength="60" placeholder="Perfumes, bolsas, acessórios…"></label><label class="col-span-2"><span class="label">Descrição para clientes • opcional</span><textarea name="description" maxlength="1000" rows="3"></textarea></label><label class="check-line col-span-2"><input type="checkbox" name="online"><span>Exibir este produto no catálogo público</span></label>`);
+    const originalEdit=editProduct;
+    editProduct=function(id){originalEdit(id);const p=products.find(p=>p.id===id),form=$('productForm');form.elements.category.value=p?.category||'';form.elements.description.value=p?.description||'';form.elements.online.checked=Boolean(p?.online);};
+    const originalSave=saveProduct;
+    saveProduct=async function(data){const f=$('productForm');if(user&&!settingsAvailable)throw Error('Execute o SQL complementar em Personalizar antes de salvar produtos nesta versão.');return originalSave({...data,category:f.elements.category.value.trim(),description:f.elements.description.value.trim(),online:f.elements.online.checked});};
+    const originalRender=render;
+    render=function(){originalRender();applyBrand(settings);};
+    const originalLoad=load;
+    load=async function(){await originalLoad();if(!user)return;const currentUser=user.id;const {data,error}=await db.from('store_settings').select('*').eq('user_id',currentUser).maybeSingle();if(user?.id!==currentUser)return;if(error){settingsAvailable=false;showBrandFeedback('Execute o SQL complementar abaixo para ativar a personalização e o catálogo. Seu estoque e suas vendas continuam preservados.',true);return;}settingsAvailable=true;settings={...defaults,...(data||{})};if(!dirty)fillBrandForm();applyBrand(settings);updateCatalogLink();};
+    const originalSession=applySession;
+    applySession=async function(session){if(!session?.user){settings={...defaults};dirty=false;fillBrandForm();applyBrand(settings);}await originalSession(session);updateCatalogLink();};
+    document.addEventListener('click',e=>{const tab=e.target.closest('[data-tab]');if(tab?.dataset.tab==='personalization')$('pageTitle').textContent='Personalize sua loja';const clear=e.target.closest('[data-clear-brand]');if(clear){media[clear.dataset.clearBrand]=null;dirty=true;renderBrandImages();applyBrand(readBrandForm());}});
+    fillBrandForm();applyBrand(settings);
+    $('brandForm').addEventListener('input',()=>{dirty=true;applyBrand(readBrandForm());});
+    $('brandLogo').onchange=e=>readBrandImage(e,'logo');$('brandBanner').onchange=e=>readBrandImage(e,'banner');
+    $('resetBrand').onclick=()=>{dirty=false;fillBrandForm();applyBrand(settings);showBrandFeedback('Alterações não salvas foram descartadas.');};
+    $('brandForm').onsubmit=async e=>{e.preventDefault();if(settingsSaveBusy)return;if(!user)return showBrandFeedback('Entre na sua conta para salvar a personalização entre aparelhos.',true);const value=readBrandForm();if(!value.name)return showBrandFeedback('Informe o nome da loja.',true);if(value.whatsapp&&!/^[1-9][0-9]{9,14}$/.test(value.whatsapp))return showBrandFeedback('Informe o WhatsApp com país e DDD, usando de 10 a 15 números.',true);if(value.published&&!value.whatsapp)return showBrandFeedback('Informe o WhatsApp antes de ativar o catálogo para receber pedidos.',true);settingsSaveBusy=true;lockBrandSave();try{const {error}=await db.from('store_settings').upsert({...value,user_id:user.id},{onConflict:'user_id'});if(error)throw error;settings=value;settingsAvailable=true;dirty=false;fillBrandForm();applyBrand(settings);updateCatalogLink();showBrandFeedback('Personalização salva no Supabase. '+(value.published?'Seu catálogo está ativo.':'O catálogo está desativado.'));}catch(error){showBrandFeedback('Não foi possível salvar. '+error.message+' Se a tabela não existe, execute o SQL complementar abaixo.',true);}finally{settingsSaveBusy=false;lockBrandSave();}};
+    $('copyCatalogLink').onclick=async()=>{const link=catalogLink();if(!link)return notify('Entre na sua conta para gerar o link.');try{await navigator.clipboard.writeText(link);notify('Link copiado. Confira se o catálogo está ativo antes de compartilhar.');}catch{notify('Copie o endereço exibido na tela.');}};
+    $('openCatalogLink').onclick=()=>{const link=catalogLink();if(!link)return notify('Entre na sua conta primeiro.');if(location.protocol==='file:')return notify('Publique a versão atualizada no Netlify antes de compartilhar o catálogo.');window.open(link,'_blank','noopener,noreferrer');};
+  }
+  function showBrandFeedback(message,error=false){const el=$('brandFeedback');if(!el)return;el.textContent=message;el.classList.remove('hidden');el.style.borderColor=error?'#d66':'var(--brand)';}
+  function readBrandForm(){const form=$('brandForm');return {name:form.elements.storeName.value.trim(),headline:form.elements.headline.value.trim(),tagline:form.elements.tagline.value.trim(),whatsapp:form.elements.whatsapp.value.replace(/\D/g,''),accent:form.elements.accent.value,background:form.elements.background.value,logo:media.logo,banner:media.banner,published:form.elements.published.checked};}
+  function fillBrandForm(){const form=$('brandForm');if(!form)return;form.elements.storeName.value=settings.name;for(const key of ['headline','tagline','whatsapp','accent','background'])form.elements[key].value=settings[key];form.elements.published.checked=settings.published;media={logo:settings.logo,banner:settings.banner};$('brandLogo').value='';$('brandBanner').value='';renderBrandImages();}
+  function renderBrandImages(){for(const key of ['logo','banner']){const img=$(key==='logo'?'brandLogoPreview':'brandBannerPreview');img.src=imageSource(media[key])||placeholder;}}
+  let imageBusy=0;
+  function lockBrandSave(){$('saveBrand').disabled=Boolean(imageBusy||settingsSaveBusy);$('saveBrand').textContent=settingsSaveBusy?'Salvando…':imageBusy?'Preparando imagem…':'Salvar personalização';}
+  async function readBrandImage(e,key){const file=e.target.files[0];if(!file)return;imageBusy++;lockBrandSave();try{if(!file.type.startsWith('image/')||file.size>12*1024*1024)throw Error('Escolha uma imagem de até 12 MB.');const objectURL=URL.createObjectURL(file);try{const img=new Image();img.src=objectURL;await img.decode();const max=key==='logo'?512:1600,scale=Math.min(1,max/Math.max(img.width,img.height));const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(img.width*scale));canvas.height=Math.max(1,Math.round(img.height*scale));const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);const image=canvas.toDataURL('image/jpeg',.78);if(image.length>(key==='logo'?500000:1800000))throw Error('Escolha uma imagem menor ou menos detalhada.');media[key]=image;dirty=true;renderBrandImages();applyBrand(readBrandForm());}finally{URL.revokeObjectURL(objectURL);}}catch(error){showBrandFeedback(error.message,true);}finally{imageBusy--;lockBrandSave();}}
+  function catalogLink(){if(!user)return '';const url=new URL(location.href);url.search='';url.hash='';url.searchParams.set('loja',user.id);return url.href;}
+  function updateCatalogLink(){const el=$('catalogLink');if(!el)return;el.textContent=user?(location.protocol==='file:'?'Publique este arquivo no Netlify para compartilhar o catálogo.':catalogLink()+(settings.published?'':' • catálogo desativado')):'Entre na sua conta para gerar o link da loja.';}
+  // Modo público usa cliente anônimo separado e somente funções com campos permitidos.
+  if(publicMode){
+    applySession=async()=>{};
+    document.body.classList.add('catalog-mode');
+    const root=document.createElement('div');root.id='storefrontRoot';document.body.append(root);
+    if(!validId(storeId)){root.innerHTML='<div class="panel public-status"><h1>Link de loja inválido</h1><p class="muted">Peça à loja o endereço atualizado do catálogo.</p></div>';return;}
+    if(!window.supabase||!SUPABASE_URL||!SUPABASE_ANON_KEY){root.innerHTML='<div class="panel public-status"><h1>Não foi possível carregar a loja</h1><p class="muted">Confira sua internet e recarregue a página.</p><button onclick="location.reload()">Tentar novamente</button></div>';return;}
+    publicClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false,storageKey:'mhy-public-catalog'},global:{fetch:fetchWithTimeout}});
+    root.innerHTML='<div class="panel public-status" role="status">Carregando catálogo…</div>';
+    publicCartDialog=document.createElement('dialog');publicCartDialog.id='catalogCartDialog';publicCartDialog.setAttribute('aria-labelledby','catalogCartTitle');document.body.append(publicCartDialog);
+    publicCartDialog.addEventListener('click',e=>{if(e.target.closest('[data-public-close]'))publicCartDialog.close();const button=e.target.closest('[data-public-adjust]');if(button)adjustPublicCart(button.dataset.id,Number(button.dataset.publicAdjust));});
+    root.addEventListener('click',e=>{const button=e.target.closest('button');if(!button)return;if(button.dataset.publicAdd)adjustPublicCart(button.dataset.publicAdd,1);if(button.id==='showPublicCart'){renderPublicCart();publicCartDialog.showModal();}if(button.id==='retryCatalog')refreshPublicCatalog();});
+    refreshPublicCatalog();
+    publicRefreshTimer=setInterval(()=>{if(!document.hidden)refreshPublicCatalog();},30000);
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshPublicCatalog();});
+    window.addEventListener('pagehide',()=>clearInterval(publicRefreshTimer),{once:true});
+  }
+  async function refreshPublicCatalog(){
+    if(publicRefreshPromise)return publicRefreshPromise;
+    publicRefreshPromise=performPublicRefresh();
+    try{return await publicRefreshPromise;}finally{publicRefreshPromise=null;}
+  }
+  async function performPublicRefresh(){
+    publicBusy=true;
+    try{
+      const {data,error}=await publicClient.rpc('get_storefront',{store:storeId});if(error)throw error;
+      if(!data?.length){publicReady=false;publicSettings=null;publicProducts=[];publicCart.clear();publicCartDialog?.close();$('storefrontRoot').innerHTML='<div class="panel public-status"><h1>Catálogo indisponível</h1><p class="muted">Esta loja ainda não publicou seu catálogo ou desativou o link.</p><button id="retryCatalog">Tentar novamente</button></div>';return;}
+      const next=[];
+      for(let page=0;;page++){if(page>10000)throw Error('Catálogo muito grande. Entre em contato com a loja.');const {data:batch,error}=await publicClient.rpc('get_catalog_products',{store:storeId,page_number:page});if(error)throw error;next.push(...batch);if(batch.length<100)break;}
+      publicSettings=data[0];publicProducts=next;publicReady=true;
+      let removed=false;for(const [id]of publicCart){if(!publicProducts.some(p=>p.id===id&&p.available)){publicCart.delete(id);removed=true;}}
+      const first=!$('storeSearch');if(first)renderStorefront();else{applyBrand(publicSettings);updatePublicBrand();renderPublicProducts();updatePublicDock();}
+      if(publicCartDialog?.open){renderPublicCart();if(removed)$('catalogFeedback').textContent='Um produto ficou indisponível e foi removido do pedido.';}
+      $('publicSync').textContent='Catálogo atualizado';
+    }catch(error){publicReady=false;if(!$('storeSearch'))$('storefrontRoot').innerHTML='<div class="panel public-status"><h1>Não foi possível carregar o catálogo</h1><p class="muted">Confira sua conexão ou peça à loja para verificar a publicação.</p><button id="retryCatalog">Tentar novamente</button></div>';else{$('publicSync').textContent='Sem atualização. Verifique sua conexão.';}if($('sendWhatsApp'))$('sendWhatsApp').disabled=true;}
+    finally{publicBusy=false;}
+  }
+  function renderStorefront(){
+    $('storefrontRoot').innerHTML=`<header class="store-header" id="publicBrand"></header><div class="store-hero" id="publicHero"></div><div class="store-filters"><input id="storeSearch" placeholder="O que você procura?" aria-label="Buscar no catálogo"><select id="storeCategory" aria-label="Filtrar categoria"><option value="">Todas as categorias</option></select></div><p id="publicSync" class="catalog-note mb-4" role="status">Catálogo atualizado</p><div id="publicProducts" class="store-grid"></div><p class="catalog-note mt-6">Pedidos enviados pelo WhatsApp estão sujeitos à confirmação de disponibilidade, preço, pagamento e entrega pela loja.</p><div class="store-dock"><div><b id="publicCartTotal">Sua sacola está vazia</b><small id="publicCartCount">Escolha seus favoritos</small></div><button class="gold" id="showPublicCart">Ver sacola</button></div>`;
+    applyBrand(publicSettings);updatePublicBrand();renderPublicProducts();updatePublicDock();
+    $('storeSearch').oninput=renderPublicProducts;$('storeCategory').onchange=renderPublicProducts;
+  }
+  function updatePublicBrand(){const s=publicSettings;$('publicBrand').innerHTML=`${imageSource(s.logo)?`<img class="brand-logo" src="${esc(s.logo)}" alt="Logo de ${esc(s.name)}">`:'<span class="gold rounded-xl p-3 font-bold">M</span>'}<div><b class="text-xl">${esc(s.name)}</b><p class="muted text-xs">CATÁLOGO ONLINE</p></div>`;$('publicHero').innerHTML=`${imageSource(s.banner)?`<img src="${esc(s.banner)}" alt="Banner de ${esc(s.name)}">`:''}<div><span class="badge">SELECIONADOS PARA VOCÊ</span><h1>${esc(s.headline||s.name)}</h1><p>${esc(s.tagline)}</p></div>`;const select=$('storeCategory'),selected=select.value;const categories=[...new Set(publicProducts.map(p=>p.category).filter(Boolean))].sort((a,b)=>a.localeCompare(b));select.innerHTML='<option value="">Todas as categorias</option>'+categories.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');if(categories.includes(selected))select.value=selected;}
+  function renderPublicProducts(){const term=$('storeSearch').value.trim().toLowerCase(),category=$('storeCategory').value;const matches=publicProducts.filter(p=>(p.name+' '+p.sku+' '+p.description).toLowerCase().includes(term)&&(!category||p.category===category));$('publicProducts').innerHTML=matches.map(p=>`<article class="store-card"><img loading="lazy" src="${esc(imageSource(p.image)||placeholder)}" alt="${esc(p.name)}"><div class="store-card-content">${p.category?`<small>${esc(p.category)}</small>`:''}<h2>${esc(p.name)}</h2>${p.description?`<p>${esc(p.description)}</p>`:''}<div class="store-price">${money(p.price)}</div><small>${p.available?'Disponível':'Indisponível no momento'}</small><button class="gold" data-public-add="${p.id}" ${!p.available?'disabled':''}>${p.available?'Adicionar à sacola':'Indisponível'}</button></div></article>`).join('')||'<div class="panel muted">Nenhum produto encontrado. Tente outra busca ou volte em breve.</div>';}
+  function adjustPublicCart(id,delta){const p=publicProducts.find(p=>p.id===id);if(!p||!p.available)return;const qty=(publicCart.get(id)||0)+delta;if(qty>99)return notify('Máximo de 99 unidades por produto no pedido.');if(qty<=0)publicCart.delete(id);else publicCart.set(id,qty);updatePublicDock();if(publicCartDialog?.open)renderPublicCart();}
+  function publicTotals(){let amount=0,count=0;for(const [id,qty]of publicCart){const p=publicProducts.find(p=>p.id===id);if(p){amount+=p.price*qty;count+=qty;}}return {amount,count};}
+  function updatePublicDock(){const t=publicTotals();$('publicCartTotal').textContent=t.count?money(t.amount):'Sua sacola está vazia';$('publicCartCount').textContent=t.count?`${t.count} item(ns) no pedido`:'Escolha seus favoritos';}
+  function renderPublicCart(){const t=publicTotals();publicCartDialog.innerHTML=`<div class="dialog-header"><h2 id="catalogCartTitle">Sua sacola</h2><button class="dialog-close" data-public-close type="button">✕ Fechar</button></div><div>${[...publicCart].map(([id,qty])=>{const p=publicProducts.find(p=>p.id===id);return p?`<div class="flex items-center gap-3 border-b border-white/10 py-3">${thumb(p)}<div class="flex-1"><b>${esc(p.name)}</b><small class="block">${qty} × ${money(p.price)}</small></div><button data-public-adjust="-1" data-id="${id}" aria-label="Remover unidade">−</button><button data-public-adjust="1" data-id="${id}" aria-label="Adicionar unidade">+</button></div>`:'';}).join('')||'<p class="muted py-5">Sua sacola está vazia.</p>'}</div><p class="flex justify-between my-5"><b>Total dos produtos</b><strong style="color:var(--brand)">${money(t.amount)}</strong></p><p class="catalog-note">O envio abre o WhatsApp para você revisar e enviar a mensagem. Não confirma pagamento, frete, venda ou reserva de estoque.</p><p id="catalogFeedback" class="my-3" role="status"></p><button class="gold w-full mt-3" id="sendWhatsApp" ${!t.count||!publicReady||!publicSettings?.whatsapp?'disabled':''}>Pedir pelo WhatsApp</button>${!publicSettings?.whatsapp?'<p class="catalog-note mt-3">A loja ainda não configurou o WhatsApp.</p>':''}`;$('sendWhatsApp').onclick=sendPublicOrder;}
+  async function sendPublicOrder(){
+    const button=$('sendWhatsApp');button.disabled=true;button.textContent='Conferindo produtos…';
+    const before=[...publicCart].map(([id,qty])=>({id,qty,price:publicProducts.find(p=>p.id===id)?.price}));
+    // Abre a aba durante o gesto do usuário para evitar bloqueio de popup após await.
+    const target=window.open('about:blank','_blank');if(target)target.opener=null;
+    try{await refreshPublicCatalog();if(!publicReady||!publicSettings)throw Error('Não foi possível atualizar a loja. Confira sua conexão e tente novamente.');if(!/^[1-9][0-9]{9,14}$/.test(publicSettings.whatsapp||''))throw Error('A loja não configurou um WhatsApp válido.');const changed=before.some(item=>{const p=publicProducts.find(p=>p.id===item.id);return !p||!p.available||p.price!==item.price;});if(changed){if(target)target.close();renderPublicCart();$('catalogFeedback').textContent='O preço ou a disponibilidade mudou. Revise a sacola e clique novamente para enviar.';return;}if(!publicCart.size)throw Error('Adicione um produto à sacola.');const lines=[`Olá, ${publicSettings.name}! Gostaria de fazer este pedido:`,'',...[...publicCart].map(([id,qty])=>{const p=publicProducts.find(p=>p.id===id);return `${qty} × ${p.name} (${p.sku}) — ${money(p.price*qty)}`;}),'',`Total dos produtos: ${money(publicTotals().amount)}`,'Aguardo confirmação de disponibilidade, pagamento, entrega e total final.'];const url='https://wa.me/'+publicSettings.whatsapp+'?text='+encodeURIComponent(lines.join('\n'));if(target)target.location.href=url;else location.assign(url);$('catalogFeedback').textContent='Pedido preparado. Revise a mensagem no WhatsApp e envie para a loja.';}catch(error){if(target)target.close();if(!publicCartDialog.open)notify(error.message);else{if(!$('catalogFeedback'))renderPublicCart();$('catalogFeedback').textContent=error.message;}}finally{if($('sendWhatsApp')){$('sendWhatsApp').disabled=!publicReady||!publicCart.size||!publicSettings?.whatsapp;$('sendWhatsApp').textContent='Pedir pelo WhatsApp';}}
+  }
+})();
+</script>
+
+</body>
+</html>

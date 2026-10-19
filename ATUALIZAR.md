@@ -1,0 +1,40 @@
+# MHY v2 — personalização e catálogo
+
+Preparado localmente, ainda não aplicado ao Supabase nem publicado no Netlify.
+
+A versão completa continua em um único `index.html`. O complemento em
+`atualizacao-personalizacao.html` pode ser copiado pelo chat e colado uma vez
+antes de `</body>` do arquivo v1.1 que já funciona no computador do usuário.
+Não substitua o arquivo inteiro apenas pelo complemento.
+
+1. Faça uma cópia de segurança do HTML atual.
+2. Execute `atualizacao-supabase.sql` no SQL Editor do projeto existente.
+   O mesmo SQL está na nova tela Personalizar. Ele preserva produtos, vendas e caixa;
+   acrescenta campos, tabela de configurações e consultas públicas com campos limitados.
+   Produtos existentes iniciam com `online=false`.
+3. Publique o `index.html` completo atualizado na publicação existente no Netlify,
+   ou acrescente o complemento ao HTML já existente antes de publicar.
+4. Entre com a mesma conta. Em Personalizar, configure nome, logo, banner, cor e fundo.
+   Nome inicial: MHY IMPORTS. WhatsApp solicitado: +55 (41) 99549-2589.
+5. Salve a personalização. Em Estoque, edite produtos e marque Exibir no catálogo.
+6. Em Personalizar, marque Ativar catálogo público, salve e copie o link gerado.
+   O link é o mesmo HTML com `?loja=<UUID do usuário>`.
+7. Teste o link em janela anônima e em celular, sem login.
+
+Visitantes recebem apenas nome/SKU/foto/categoria/descrição/preço/disponibilidade.
+Não há leitura pública direta da tabela de produtos ou das tabelas financeiras.
+As consultas públicas retornam dados apenas de lojas ativas e produtos selecionados.
+Não publique service_role ou outras chaves secretas no HTML.
+
+O carrinho abre o WhatsApp para revisão e envio pelo cliente. Não envia mensagens
+sozinho, não recebe pagamentos, não reserva estoque nem registra vendas. O lojista
+confirma a venda na área administrativa. A disponibilidade pública é atualizada
+periodicamente e conferida novamente antes de preparar a mensagem do pedido.
+
+Validação local: Playwright/Chromium em desktop e 390px; endpoints Supabase simulados
+para testar personalização, catálogo e carrinho; scripts CDN baixados com TLS validado.
+PostgreSQL/PGlite com auth.uid simulado: migração repetível, preservação de dados,
+isolamento RLS, campos públicos, catálogo desativado e ausência de acesso financeiro anônimo.
+O login, CRUD, sincronização e venda da v1.1 foram confirmados pelo usuário no projeto real.
+A nova migração e a versão v2 ainda precisam ser executadas/publicadas pelo usuário;
+não houve acesso administrativo ao Supabase ou Netlify nesta tarefa.

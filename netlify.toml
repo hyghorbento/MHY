@@ -1,0 +1,7 @@
+# Publicação contínua: o site usa somente o HTML gerado a partir do código fonte.
+[build]
+  command = "node scripts/build.mjs"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
