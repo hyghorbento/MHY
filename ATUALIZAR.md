@@ -46,3 +46,17 @@ Execute esse SQL no projeto existente após a publicação do código. É uma mi
 complementar; não repita a configuração inicial e não apague tabelas.
 Cupons só passam a validar no projeto real depois dessa execução. As vendas sem
 cupom continuam usando a função anterior. Consulte README.md para testes e regras.
+
+## v3 — novos pagamentos e controle de cobrança
+
+1. Aguarde a publicação da versão atual no Netlify e atualize o site.
+2. Abra Contas a receber e copie o SQL da atualização v3 na seção de ativação.
+3. Execute no SQL Editor do mesmo projeto Supabase e atualize o aplicativo.
+4. Em Vendas, escolha Dinheiro ou Crediário/fiado. Para fiado, informe o cliente,
+   escolha as parcelas e confira datas e valores. Sem juros.
+5. Registre o dinheiro recebido em Contas a receber > Receber (parcial ou integral).
+6. Use Histórico de vendas > Ver itens para conferir vendas antigas e novas.
+7. Para encomendas não cadastradas, use Vendas > Item avulso/encomenda.
+
+A migração é aditiva e não apaga dados existentes. Até a execução, recursos novos
+não conseguem gravar no Supabase. Não repita o SQL inicial nem exclua tabelas.

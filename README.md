@@ -67,3 +67,42 @@ NODE_PATH=/tmp/mhy-test-deps/node_modules node --test tests/coupons-db.test.cjs
 
 O teste de SQL fica explicitamente marcado como skipped se PGlite não estiver
 instalado. Não interprete skipped como validação do banco.
+
+## v3 — dinheiro, crediário, histórico e avulsos
+
+Execute `atualizacao-vendas-v3.sql` uma vez no projeto existente. O mesmo SQL está
+em Contas a receber > Ativar dinheiro, crediário e itens avulsos > Copiar SQL.
+A migração preserva registros existentes e inclui os pré-requisitos de cupons.
+Vendas normais sem os recursos novos continuam com fallback para o checkout anterior
+caso a migração ainda não tenha sido aplicada. A migração v3 deve ser a última na
+sequência; executar manualmente migrações antigas depois dela pode substituir funções.
+O botão de SQL dos cupons na interface atual já entrega a migração compatível com v3.
+
+- Dinheiro: taxa zero e entrada imediata no caixa.
+- Crediário: cliente obrigatório; telefone opcional; de 1 a 24 parcelas, sem juros,
+  com datas e valores configuráveis. Não cria entrada de caixa ao registrar a venda.
+- Contas a receber: parcelas, saldos, atrasos, busca por cliente e pagamento parcial
+  ou total. O botão de cobrança prepara uma mensagem no WhatsApp para o lojista revisar;
+  não envia mensagens automaticamente.
+- Recebimento: dinheiro sem taxa, PIX 0,50%, débito 0,99% ou crédito à vista 2,99%.
+  A dívida baixa pelo valor pago pelo cliente; o caixa recebe o líquido após taxa.
+- Dashboard: faturamento contempla vendas a prazo; lucro realizado do crediário
+  reconhece a proporção do custo referente ao principal recebido, menos as taxas
+  efetivamente registradas. O saldo a receber e o total vencido ficam separados.
+- Histórico: todas as vendas, filtros de data/pagamento/cliente/produto, itens e detalhes.
+  Os nomes e valores registrados na venda são preservados mesmo se o cadastro mudar.
+- Item avulso/encomenda: descrição, custo, preço e quantidade na sacola. Não cria
+  produto e não baixa estoque. Carrinho pode misturar avulsos e produtos cadastrados.
+
+Os dados de clientes, parcelas e recebimentos têm RLS e somente leitura para o dono.
+Inserções e baixas são efetuadas por funções transacionais autenticadas e idempotentes.
+O catálogo público não recebe dados do crediário e não permite criar itens avulsos.
+
+Testes PostgreSQL locais (PGlite instalado conforme instrução acima):
+
+```sh
+NODE_PATH=/tmp/mhy-test-deps/node_modules node --test tests/session.test.mjs tests/coupons-db.test.cjs tests/sales-v3-db.test.cjs
+```
+
+A execução da migração no Supabase real é uma etapa do usuário; o build do Netlify
+apenas publica HTML e não executa SQL no banco.
