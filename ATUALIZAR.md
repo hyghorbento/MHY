@@ -60,3 +60,22 @@ cupom continuam usando a função anterior. Consulte README.md para testes e reg
 
 A migração é aditiva e não apaga dados existentes. Até a execução, recursos novos
 não conseguem gravar no Supabase. Não repita o SQL inicial nem exclua tabelas.
+
+## v3.1 — entrada no crediário, fotos e correção de vendas
+
+1. Abra o site publicado e confira **v3.1** no cabeçalho.
+2. Em **Contas a receber**, expanda **Ativar entrada, edição e exclusão protegida**.
+3. Clique **Copiar SQL da atualização v3.1**; cole no SQL Editor do projeto
+   Supabase existente e execute **Run**. O arquivo equivalente é
+   `atualizacao-vendas-v31.sql`. Não execute o SQL inicial nem apague tabelas.
+4. Atualize o aplicativo. Em Vendas > Crediário, informe a entrada recebida e
+   parcele apenas o restante. Confira o caixa e o plano antes de confirmar.
+5. Em Histórico, use **Editar** para corrigir uma venda antiga que ainda não foi
+   paga: selecione Crediário, informe somente a entrada realmente recebida e
+   ajuste as datas/valores do saldo. O total e os produtos são preservados.
+6. Para excluir, informe novamente seu e-mail/senha e confirme os ajustes. A
+   exclusão altera estoque, caixa e contas a receber; não é o comando de quitação.
+
+O SQL mantém os dados existentes. Pagamentos de parcelas já registrados não são
+apagados pela edição; só o restante recebe novo plano. Não execute migrações
+anteriores depois da v3.1, pois elas podem substituir as funções atualizadas.

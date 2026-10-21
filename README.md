@@ -106,3 +106,46 @@ NODE_PATH=/tmp/mhy-test-deps/node_modules node --test tests/session.test.mjs tes
 
 A execução da migração no Supabase real é uma etapa do usuário; o build do Netlify
 apenas publica HTML e não executa SQL no banco.
+
+## v3.1 — entrada, correções e exclusão de vendas
+
+Execute `atualizacao-vendas-v31.sql` uma vez no mesmo banco (ou copie em
+**Contas a receber > Ativar entrada, edição e exclusão protegida > Copiar SQL v3.1**).
+A migração inclui os recursos v3 e preserva cadastros, vendas e pagamentos atuais.
+Não repita versões antigas do SQL depois desta atualização.
+
+- Em **Vendas > Crediário**, informe a entrada recebida e sua forma de pagamento.
+  O plano divide somente o restante; permite ajustar cada vencimento e valor.
+  A entrada vai ao caixa com a taxa correspondente (dinheiro 0; PIX 0,50%;
+  débito 0,99%; crédito à vista 2,99%). As parcelas futuras só entram ao receber.
+- **Histórico de vendas** mostra fotos, nomes e saldo; as vendas recentes do
+  dashboard também mostram o item. Novas vendas guardam a foto no histórico.
+  Vendas antigas usam a foto do cadastro enquanto o produto existir.
+- **Editar** corrige cliente, telefone, forma de pagamento, entrada e plano do saldo.
+  Preserva o total, itens e baixa de estoque. Uma venda antiga marcada paga pode
+  virar crediário com entrada zero ou parcial, corrigindo o caixa. Recebimentos de
+  parcelas já lançados são preservados: suas parcelas ficam quitadas e o restante
+  recebe novas datas/valores. A entrada não inclui os recebimentos posteriores.
+  Valores e taxas históricos são mantidos se a entrada e a forma não mudam.
+- **Excluir** exige e-mail/senha da conta conectada e confirmação dos ajustes.
+  Um cliente Supabase separado e sem persistência valida a senha; o banco exige
+  `amr.password` recente (até 120 segundos), além da propriedade da venda e revisão
+  atual. Uma renovação comum de token não renova essa prova de senha. A senha não
+  é enviada a funções SQL, salva ou registrada no histórico.
+  A exclusão restaura estoque dos produtos ainda cadastrados, remove parcelas e
+  lançamentos vinculados, e guarda snapshot privado em `sale_changes`. Não faz
+  devolução financeira ao cliente. Use **Receber** para quitar dívidas reais.
+- A revisão da venda impede sobrescrever um recebimento feito em outro aparelho.
+  Alterações e exclusões são transacionais; repetir exclusão não duplica estoque.
+
+Validação financeira e de autenticação (PGlite):
+
+```sh
+NODE_PATH=/tmp/mhy-tools/node_modules:$NODE_PATH node --test tests/*-db.test.cjs tests/session.test.mjs
+```
+
+O teste `tests/sales-v31-browser.test.cjs` usa Playwright/Chromium e PGlite,
+serve o HTML localmente e intercepta somente os endpoints de teste. Configure
+`MHY_CDN_CACHE` com os scripts oficiais `mhy-tailwind.js` e `mhy-supabase.js`
+baixados com verificação TLS (padrão `/tmp`) e, se necessário, `CHROMIUM_PATH`.
+Sem as dependências/arquivos, o teste informa SKIP; não valida o Supabase real.
