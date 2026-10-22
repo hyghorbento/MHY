@@ -158,3 +158,29 @@ O seletor Ordenar por oferece ordem da consulta, menor/maior preço em reais, no
 e fornecedor. Usa o câmbio manual salvo; ofertas sem preço exato ou câmbio ficam
 no final em ambas as ordens de preço. Ordenar preserva a associação do produto aos
 botões Comparar e Precificar, inclusive enquanto chegam resultados novos.
+
+## v1.4 — reais e câmbio de cada fornecedor
+
+Prioriza o preço em reais publicado no próprio cartão. Sem esse preço, usa a
+cotação publicada pela loja; o câmbio manual de Configurações é apenas alternativa
+identificada. Não aplica a cotação de uma loja a outra. Pesquisa atualiza dados
+de ofertas já selecionadas para comparação quando o mesmo link reaparece.
+
+- Connect e Intershop: cotação explícita no cabeçalho + preço BRL por produto.
+- Shopping China: preço BRL do cartão e cotação explícita da página.
+- Mega: preço BRL do cartão; a razão BRL/USD aparece como conversão implícita,
+  não como uma cotação oficial publicada. Essa razão não é aplicada a outros itens.
+- New Zone: endpoint público `/ajax/cotation`, o mesmo consumido pela loja; não
+  usa o fallback antigo no HTML nem soma imposto estimado ao preço do produto.
+- Charme: não foi encontrada cotação pública na página consultada. Mantém o preço
+  em USD e informa a falta do câmbio; uma alternativa manual fica identificada.
+- Lojas bloqueadas ou sem dados legíveis não recebem cotações inventadas.
+
+O valor em reais vira destaque nos resultados, comparação e ordenação. Precificar
+preenche BRL com o custo exato da loja/conversão e aplica apenas o percentual
+manual daquele produto. Nenhuma atualização SQL é necessária.
+
+No teste real de 22/10/2026: Connect 5,17; Intershop 5,14; China 5,18; New Zone
+5,18; Mega preço simultâneo US$23/R$118,45 (razão 5,15). Esses valores são evidência
+da consulta e não constantes do código. São obtidos novamente nas pesquisas,
+respeitando o cache curto da função.
