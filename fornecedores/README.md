@@ -20,25 +20,29 @@ Arredondamento decimal em centavos corresponde ao cálculo PostgreSQL.
 
 ## Consulta de fornecedores: limites e evidências
 
-O ambiente de desenvolvimento respondeu `Tunnel connection failed: 403 Forbidden`
-para os oito domínios em 22/10/2026. Isso é uma restrição da rede deste ambiente,
-não evidência de indisponibilidade das lojas. Nenhum preço real foi confirmado.
-Para validar aqui, os domínios abaixo precisam estar acessíveis nas configurações
-de rede do ambiente, preservando os domínios que já estiverem autorizados:
+Após a publicação da configuração de rede pelo usuário em 22/10/2026, a pesquisa
+real de `club de nuit` foi validada nos domínios públicos. O acesso Node neste
+ambiente exige `NODE_USE_ENV_PROXY=1` para usar o proxy já fornecido; não desative
+TLS nem extraia credenciais de proxy. A hospedagem Netlify usa sua rede normal.
 
-- www.charmeperfumeria.com.br / charmeperfumeria.com.br
-- newzone.com.br / www.newzone.com.br
-- atacadoconnect.com / www.atacadoconnect.com
-- megaeletronicos.com / www.megaeletronicos.com
-- cellshop.com.br / www.cellshop.com.br
-- www.shoppingchina.com.br / shoppingchina.com.br
-- stargamesparaguay.com / www.stargamesparaguay.com
-- intershop.com.py / www.intershop.com.py
+- Atacado Connect: 20 itens lidos na primeira página; preço primário em U$.
+- Shopping China: 7 itens; preço público em reais. Valores em dólares comentados
+  no HTML não são utilizados como ofertas.
+- Mega Eletrônicos: 22 itens; preço primário em U$.
+- New Zone: 12 itens; `/busca/<termo>` confirmado no formulário e resposta real.
+  Lê apenas preço unitário; o imposto estimado exibido à parte não é somado.
+- Intershop: 19 itens; `/category?searchHttp=<termo>` confirmado no formulário.
+- Charme: 12 itens, incluindo itens marcados sem estoque e sem valor. O formato
+  `U$S: 30,00` é dólar explícito; não é convertido a partir do símbolo $ sozinho.
+- Star Games: página real informou **Sem resultados** para o termo. O sistema
+  distingue esse retorno explícito de uma falha de leitura.
+- Cellshop: a página abriu, mas os resultados são carregados por JavaScript via
+  serviço de busca. Essa integração continua pendente e é indicada como tal.
 
-As rotas de Charme, Atacado Connect, Mega, Cellshop e Shopping China foram
-compostas a partir dos links enviados pelo usuário. Star Games usa o formato
-padrão de busca WooCommerce e precisa de validação ao vivo. New Zone e Intershop
-ficam explicitamente em busca assistida: não foi inventada uma rota de pesquisa.
+As quantidades acima registram o teste de 22/10/2026, não uma garantia de estoque
+ou preço atual. As seis leituras são específicas dos layouts observados. Amostras
+reais mínimas estão em tests/fixtures/suppliers para regressão. Bloqueios 403/406
+podem variar por rede; não são contornados pelo aplicativo.
 
 A função Netlify `suppliers` consulta HTML público e lê JSON-LD Product/ItemList,
 microdados e cartões de produto (incluindo preços promocionais). Se a busca
@@ -135,8 +139,14 @@ node scripts/cache-ocr-test-assets.mjs
 node --test tests/suppliers-photo-browser.test.cjs
 ```
 
-A liberação dos oito domínios e da hospedagem foi salva no rascunho de rede do
-ambiente, preservando o preset de gerenciadores de pacotes. Só fica ativa após
-revisar/salvar e publicar o ambiente. Até validar respostas reais, os novos
-leitores HTML são melhorias testadas em fixtures, não correções confirmadas em
-cada loja. Não contornam bloqueios HTTP 403/429 de Mega ou Cellshop.
+A liberação de rede foi aplicada pelo usuário em 22/10/2026. O teste no navegador
+local executando a API real retornou 92 cartões para Club de Nuit (incluindo
+variações e itens sem estoque), sem respostas simuladas de fornecedores. A
+Cellshop continua pendente por carregar resultados em JavaScript.
+
+## v1.2 — leitura validada com Club de Nuit
+
+Substitui as buscas assistidas de New Zone e Intershop por rotas confirmadas e
+inclui adaptadores específicos para os seis fornecedores acima. A leitura de
+produto único não usa cartões de recomendações como se fossem o item selecionado.
+Nenhuma alteração SQL ou de precificação foi necessária nesta correção.

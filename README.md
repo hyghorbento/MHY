@@ -159,5 +159,5 @@ compara ofertas em reais e aplica percentual manual por produto, sem cálculo de
 custos de importação. Integração com a MHY por login e RPC revisada; produtos
 existentes permanecem intactos. As limitações de leitura pública, ativação SQL e
 testes estão no README do projeto. `netlify/functions/suppliers.mjs` faz consultas
-públicas no servidor com hosts restritos. Nenhum preço real foi confirmado no
-ambiente de desenvolvimento por restrição de acesso aos domínios dos fornecedores.
+públicas no servidor com hosts restritos. A pesquisa real de Club de Nuit foi validada em seis lojas após a liberação
+da rede; a integração da Cellshop continua pendente. Veja o README do projeto.

@@ -1,12 +1,12 @@
 export const SUPPLIERS=[
  {id:'charme',name:'Charme Perfumaria',host:'www.charmeperfumeria.com.br',category:'Perfumes',search:q=>'https://www.charmeperfumeria.com.br/buscar.php?'+new URLSearchParams({q,q_type:''})},
- {id:'newzone',name:'New Zone',host:'newzone.com.br',category:'Tecnologia',search:null},
+ {id:'newzone',name:'New Zone',host:'newzone.com.br',category:'Tecnologia',search:q=>'https://newzone.com.br/busca/'+encodeURIComponent(q)},
  {id:'connect',name:'Atacado Connect',host:'atacadoconnect.com',category:'Tecnologia',search:q=>'https://atacadoconnect.com/termo/'+encodeURIComponent(q.trim().replace(/\s+/g,'-'))},
  {id:'mega',name:'Mega Eletrônicos',host:'megaeletronicos.com',category:'Tecnologia',search:q=>'https://megaeletronicos.com/producto/buscar/?'+new URLSearchParams({search:q,flex:'true'})},
  {id:'cellshop',name:'Cellshop',host:'cellshop.com.br',category:'Tecnologia e variedades',search:q=>'https://cellshop.com.br/?'+new URLSearchParams({s:q,post_type:'product'})},
  {id:'china',name:'Shopping China',host:'www.shoppingchina.com.br',category:'Variedades',search:q=>'https://www.shoppingchina.com.br/site/search?'+new URLSearchParams({query:q})},
  {id:'stargames',name:'Star Games',host:'stargamesparaguay.com',category:'Games',search:q=>'https://stargamesparaguay.com/?'+new URLSearchParams({s:q,post_type:'product'})},
- {id:'intershop',name:'Intershop',host:'intershop.com.py',category:'Variedades',search:null}
+ {id:'intershop',name:'Intershop',host:'intershop.com.py',category:'Variedades',search:q=>'https://intershop.com.py/category?'+new URLSearchParams({searchHttp:q})}
 ];
 export function supplierFor(value){let u;try{u=new URL(value);}catch{throw Error('Cole um endereço HTTPS completo do produto.');}if(u.protocol!=='https:'||u.username||u.password||u.port)throw Error('Use um link HTTPS sem senha ou porta personalizada.');const host=u.hostname.toLowerCase().replace(/^www\./,'');const supplier=SUPPLIERS.find(s=>s.host.replace(/^www\./,'')===host);if(!supplier)throw Error('Este endereço não pertence aos oito fornecedores cadastrados.');return supplier;}
 export function sourceURL(value){supplierFor(value);const u=new URL(value);u.hash='';for(const key of [...u.searchParams.keys()])if(/^utm_|^(fbclid|gclid)$/i.test(key))u.searchParams.delete(key);return u.href;}
