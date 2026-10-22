@@ -149,3 +149,14 @@ serve o HTML localmente e intercepta somente os endpoints de teste. Configure
 `MHY_CDN_CACHE` com os scripts oficiais `mhy-tailwind.js` e `mhy-supabase.js`
 baixados com verificação TLS (padrão `/tmp`) e, se necessário, `CHROMIUM_PATH`.
 Sem as dependências/arquivos, o teste informa SKIP; não valida o Supabase real.
+
+## Projeto Fornecedores Paraguai
+
+A aplicação independente está em [`fornecedores/`](fornecedores/README.md),
+publicada pelo mesmo build em `/fornecedores/`. Pesquisa oito fornecedores,
+compara ofertas em reais e aplica percentual manual por produto, sem cálculo de
+custos de importação. Integração com a MHY por login e RPC revisada; produtos
+existentes permanecem intactos. As limitações de leitura pública, ativação SQL e
+testes estão no README do projeto. `netlify/functions/suppliers.mjs` faz consultas
+públicas no servidor com hosts restritos. Nenhum preço real foi confirmado no
+ambiente de desenvolvimento por restrição de acesso aos domínios dos fornecedores.

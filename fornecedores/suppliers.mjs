@@ -1,0 +1,16 @@
+export const SUPPLIERS=[
+ {id:'charme',name:'Charme Perfumaria',host:'www.charmeperfumeria.com.br',category:'Perfumes',search:q=>'https://www.charmeperfumeria.com.br/buscar.php?'+new URLSearchParams({q,q_type:''})},
+ {id:'newzone',name:'New Zone',host:'newzone.com.br',category:'Tecnologia',search:null},
+ {id:'connect',name:'Atacado Connect',host:'atacadoconnect.com',category:'Tecnologia',search:q=>'https://atacadoconnect.com/termo/'+encodeURIComponent(q.trim().replace(/\s+/g,'-'))},
+ {id:'mega',name:'Mega Eletrônicos',host:'megaeletronicos.com',category:'Tecnologia',search:q=>'https://megaeletronicos.com/producto/buscar/?'+new URLSearchParams({search:q,flex:'true'})},
+ {id:'cellshop',name:'Cellshop',host:'cellshop.com.br',category:'Tecnologia e variedades',search:q=>'https://cellshop.com.br/?'+new URLSearchParams({s:q,post_type:'product'})},
+ {id:'china',name:'Shopping China',host:'www.shoppingchina.com.br',category:'Variedades',search:q=>'https://www.shoppingchina.com.br/site/search?'+new URLSearchParams({query:q})},
+ {id:'stargames',name:'Star Games',host:'stargamesparaguay.com',category:'Games',search:q=>'https://stargamesparaguay.com/?'+new URLSearchParams({s:q,post_type:'product'})},
+ {id:'intershop',name:'Intershop',host:'intershop.com.py',category:'Variedades',search:null}
+];
+export function supplierFor(value){let u;try{u=new URL(value);}catch{throw Error('Cole um endereço HTTPS completo do produto.');}if(u.protocol!=='https:'||u.username||u.password||u.port)throw Error('Use um link HTTPS sem senha ou porta personalizada.');const host=u.hostname.toLowerCase().replace(/^www\./,'');const supplier=SUPPLIERS.find(s=>s.host.replace(/^www\./,'')===host);if(!supplier)throw Error('Este endereço não pertence aos oito fornecedores cadastrados.');return supplier;}
+export function sourceURL(value){supplierFor(value);const u=new URL(value);u.hash='';for(const key of [...u.searchParams.keys()])if(/^utm_|^(fbclid|gclid)$/i.test(key))u.searchParams.delete(key);return u.href;}
+export function searchLink(s,q){return s.search?s.search(q):'https://www.google.com/search?'+new URLSearchParams({q:'site:'+s.host+' '+q});}
+function decimal(value,label){const string=String(value??'');if(!/^\d+(?:\.\d+)?$/.test(string)||string.length>50)throw Error('Confira '+label+' (use números decimais).');const n=Number(string);if(!Number.isFinite(n)||n<0)throw Error('Confira '+label+'.');const parts=string.split('.');return{value:n,n:BigInt(parts.join('')),d:10n**BigInt(parts[1]?.length||0)};}
+const round=(n,d)=>(n*2n+d)/(d*2n);
+export function pricing({amount,currency,rate,percent}){const price=decimal(amount,'o preço do fornecedor'),fx=decimal(currency==='BRL'?1:rate,'o câmbio'),pct=decimal(percent,'o percentual');if(!['BRL','USD','PYG'].includes(currency)||fx.value<=0||fx.value>1000000||price.value<=0||price.value>1000000000000||pct.value>1000)throw Error('Revise o preço, a moeda, o câmbio e o percentual.');const c=round(price.n*fx.n*100n,price.d*fx.d),s=round(c*(100n*pct.d+pct.n),100n*pct.d),cost=Number(c),sale=Number(s);if(!Number.isSafeInteger(cost)||!Number.isSafeInteger(sale)||sale>999999900||cost>999999900||cost<1)throw Error('Preço fora do limite da loja.');return{cost,sale,profit:sale-cost};}
