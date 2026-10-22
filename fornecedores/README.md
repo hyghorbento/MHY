@@ -40,7 +40,9 @@ compostas a partir dos links enviados pelo usuário. Star Games usa o formato
 padrão de busca WooCommerce e precisa de validação ao vivo. New Zone e Intershop
 ficam explicitamente em busca assistida: não foi inventada uma rota de pesquisa.
 
-A função Netlify `suppliers` consulta HTML público e lê JSON-LD Product/ItemList;
+A função Netlify `suppliers` consulta HTML público e lê JSON-LD Product/ItemList,
+microdados e cartões de produto (incluindo preços promocionais). Se a busca
+contiver apenas links, consulta até quatro páginas do mesmo fornecedor em paralelo;
 a leitura de um produto também aceita metadados Open Graph. Sites com conteúdo
 só em JavaScript, autenticação, bloqueios ou formato diferente podem retornar
 leitura indisponível. Não executa login nos fornecedores, não contorna CAPTCHA,
@@ -77,10 +79,11 @@ A chave publishable é pública; as permissões continuam aplicadas no Supabase.
 
 ## Desenvolvimento e publicação
 
-Use o checkout existente, sem criar worktree. Sem dependências para o aplicativo:
+Use o checkout existente, sem criar worktree. Instale o parser HTML fixado no lockfile:
 
 ```sh
 cd /workspace/MHY
+npm ci
 node fornecedores/dev.mjs
 ```
 
@@ -93,7 +96,7 @@ e preserva `dist/index.html` da MHY. O Netlify compila a função em
 `netlify/functions/suppliers.mjs` com esbuild. Não abre produtos ou efetua compras
 ao publicar o código.
 
-Testes sem dependências extras:
+Testes do parser e precificação (após npm ci):
 
 ```sh
 node --test tests/suppliers.test.mjs
@@ -111,3 +114,29 @@ O teste de navegador usa Playwright, Chromium `/usr/bin/chromium`, respostas de
 fornecedores simuladas e PostgreSQL/PGlite local. Verifica integração real contra
 o banco de teste, foto/câmbio/percentual/estoque/repetição de envio e telas de 390px;
 não comprova leitura ao vivo dos fornecedores ou execução no Supabase real.
+
+## v1.1 — Buscar por foto
+
+Nova aba permite escolher foto da galeria, tirar foto, girar a imagem, ler o
+nome/rótulo e revisar a consulta antes de pesquisar nas mesmas lojas selecionadas.
+Usa OCR Tesseract.js 6.0.1 no navegador, com worker/core/modelo versionados no
+jsDelivr. A imagem não é enviada ao Netlify, Supabase ou fornecedores pela busca;
+só o texto confirmado vira consulta. O OCR pode errar em rótulos estilizados e
+não identifica um produto apenas por sua aparência. Para uma foto sem nome
+legível, o usuário pode editar a consulta. Não resolve bloqueios de leitura nas
+lojas e não confirma preço ou identidade por similaridade visual.
+
+No teste funcional, o OCR verdadeiro reconheceu ARMAF CLUB DE NUIT INTENSE MAN
+em uma imagem de teste, encaminhou o texto editado para as oito consultas e não
+enviou imagem na requisição. Para reproduzir com os arquivos oficiais em cache:
+
+```sh
+node scripts/cache-ocr-test-assets.mjs
+node --test tests/suppliers-photo-browser.test.cjs
+```
+
+A liberação dos oito domínios e da hospedagem foi salva no rascunho de rede do
+ambiente, preservando o preset de gerenciadores de pacotes. Só fica ativa após
+revisar/salvar e publicar o ambiente. Até validar respostas reais, os novos
+leitores HTML são melhorias testadas em fixtures, não correções confirmadas em
+cada loja. Não contornam bloqueios HTTP 403/429 de Mega ou Cellshop.

@@ -1,4 +1,4 @@
-# Publicação contínua: o site usa somente o HTML gerado a partir do código fonte.
+# Publicação contínua: dashboard MHY, Fornecedores e função de consulta.
 [build]
   command = "node scripts/build.mjs"
   publish = "dist"

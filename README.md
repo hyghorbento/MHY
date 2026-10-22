@@ -13,8 +13,9 @@ python3 -m http.server 8000 --bind 0.0.0.0
 
 ## Publicação automática no Netlify
 
-O projeto já contém `netlify.toml`. O build `node scripts/build.mjs` copia somente
-`index.html` para `dist/index.html`, sem dependências npm. A pasta publicada é `dist`.
+O projeto já contém `netlify.toml`. O build `node scripts/build.mjs` copia o dashboard para `dist/index.html` e
+o projeto Fornecedores para `dist/fornecedores/`. A função de consulta usa Cheerio;
+instale as dependências com `npm ci`. A pasta publicada é `dist`.
 O SQL e os documentos não são copiados para a publicação.
 
 Para ativar, envie o código deste checkout ao repositório GitHub `hyghorbento/MHY`
