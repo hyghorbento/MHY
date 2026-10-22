@@ -150,3 +150,11 @@ Substitui as buscas assistidas de New Zone e Intershop por rotas confirmadas e
 inclui adaptadores específicos para os seis fornecedores acima. A leitura de
 produto único não usa cartões de recomendações como se fossem o item selecionado.
 Nenhuma alteração SQL ou de precificação foi necessária nesta correção.
+
+## v1.3 — ordem dos resultados
+
+Os cartões de situação das lojas ficam ao final da pesquisa, depois dos produtos.
+O seletor Ordenar por oferece ordem da consulta, menor/maior preço em reais, nome
+e fornecedor. Usa o câmbio manual salvo; ofertas sem preço exato ou câmbio ficam
+no final em ambas as ordens de preço. Ordenar preserva a associação do produto aos
+botões Comparar e Precificar, inclusive enquanto chegam resultados novos.
