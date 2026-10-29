@@ -79,3 +79,18 @@ não conseguem gravar no Supabase. Não repita o SQL inicial nem exclua tabelas.
 O SQL mantém os dados existentes. Pagamentos de parcelas já registrados não são
 apagados pela edição; só o restante recebe novo plano. Não execute migrações
 anteriores depois da v3.1, pois elas podem substituir as funções atualizadas.
+
+## v3.2 — editar lançamento manual de caixa
+
+1. Atualize o sistema principal e confira v3.2 no cabeçalho.
+2. Em **Fluxo de caixa**, expanda **Ativar edição do Fluxo de caixa** e clique
+   **Copiar SQL de edição do caixa**.
+3. Cole no SQL Editor do mesmo Supabase e execute Run; é uma atualização aditiva
+   que preserva todos os lançamentos e vendas existentes.
+4. Atualize o sistema, localize o lançamento manual e clique **Editar**.
+5. Corrija descrição, tipo, valor ou data/hora; confira a variação prevista no
+   saldo e confirme **Salvar correção**.
+
+O sistema não duplica o lançamento corrigido. Vendas mantêm o vínculo e devem ser
+corrigidas por **Corrigir na venda**. Pagamentos de parcelas não são liberados para
+edição financeira isolada pelo Fluxo de caixa.

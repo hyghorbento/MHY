@@ -161,3 +161,24 @@ existentes permanecem intactos. As limitações de leitura pública, ativação 
 testes estão no README do projeto. `netlify/functions/suppliers.mjs` faz consultas
 públicas no servidor com hosts restritos. A pesquisa real de Club de Nuit foi validada em seis lojas após a liberação
 da rede; a integração da Cellshop continua pendente. Veja o README do projeto.
+
+## v3.2 — edição do Fluxo de caixa
+
+Em Fluxo de caixa, cada lançamento **manual** tem o botão Editar para corrigir
+descrição, entrada/saída, valor positivo e data/hora. A edição substitui o registro
+no cálculo, atualiza saldo/indicadores e guarda antes/depois em tabela privada
+`cash_movement_changes`, com RLS da conta. Não cria segunda movimentação nem
+executa transferência ou devolução bancária. Uma revisão evita sobrescrever
+correções de outro aparelho, e o identificador da solicitação torna retries seguros.
+
+Execute `atualizacao-fluxo-caixa.sql` no mesmo Supabase, uma vez. O SQL está no
+final da aba **Fluxo de caixa > Ativar edição > Copiar SQL de edição do caixa**.
+Não execute novamente o SQL inicial. Não há exclusão de lançamentos nesta versão.
+Vendas e pagamentos vinculados não podem ter valores editados por essa RPC:
+lançamentos de venda oferecem **Corrigir na venda**, e parcelas mostram sua origem
+em Contas a receber. A função mantém privilégios de update direto bloqueados.
+
+Testes `cash-edit-db.test.cjs` e `sales-v31-browser.test.cjs` verificam alteração de
+valor/tipo/data, caixa recalculado, proteção da origem, histórico, retry, isolamento,
+migração repetível e regressão de vendas/crediário/login. Sem alterações nos dados
+reais até o usuário executar o SQL e salvar uma correção autenticada.
