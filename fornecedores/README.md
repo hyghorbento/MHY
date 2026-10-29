@@ -184,3 +184,46 @@ No teste real de 22/10/2026: Connect 5,17; Intershop 5,14; China 5,18; New Zone
 5,18; Mega preço simultâneo US$23/R$118,45 (razão 5,15). Esses valores são evidência
 da consulta e não constantes do código. São obtidos novamente nas pesquisas,
 respeitando o cache curto da função.
+
+## v1.5 — listas de compras e pedidos
+
+A aba **Lista / Pedidos** guarda produtos em espera na conta Supabase (RLS por
+usuário), permitindo múltiplas listas, quantidade, cliente/encomenda e observações.
+Os botões **+ Lista / pedido** aparecem na pesquisa, na comparação e no formulário
+de produto. É necessário estar conectado à mesma conta MHY. Não salva dados de
+clientes no localStorage. A aba carrega os dados ao entrar, atualizar ou voltar
+à janela, permitindo continuar em outro aparelho; não promete atualização por
+WebSocket enquanto duas abas permanecem abertas.
+
+Estados: **Em espera → Comprado → Enviado à MHY**. Salvar e marcar comprado não
+alteram estoque/catálogo/caixa. Para enviar, revise o custo realmente pago, o
+percentual manual e a opção de publicação. A quantidade vem da lista e deve ser
+corrigida nela antes de abrir o envio, evitando adicionar uma quantidade diferente
+por acidente. O histórico guarda custo e preço de venda confirmados por unidade.
+
+No envio, se o mesmo URL já foi importado, soma a quantidade adquirida ao estoque,
+atualiza custo unitário pelo último custo revisado e aplica o novo preço de venda;
+SKU, nome, descrição e fotos existentes são preservados. Publicação existente não
+é desativada; marcar a opção do catálogo ativa a publicação. Não faz custo médio
+nem altera snapshots de vendas anteriores. Produtos cadastrados manualmente sem
+vínculo com o URL não são associados automaticamente apenas por nome parecido.
+Não há lançamento automático de compra ou saída de caixa.
+
+A confirmação é uma RPC transacional, protegida por propriedade, estado e revisão
+para não sobrescrever edição de outro aparelho. Repetir o envio após sucesso ou
+falha de resposta não soma estoque novamente. Itens enviados ficam preservados;
+uma nova compra do mesmo link pode ser adicionada como novo item pendente.
+
+### Ativação
+
+Na aba Lista / Pedidos, use **Copiar SQL de Listas e Pedidos** e execute no SQL
+Editor do mesmo projeto Supabase. O botão copia `integracao.sql` completo, que
+inclui a integração anterior mais a migração aditiva `lista-compras.sql`. Quem já
+executou a integração pode executar apenas `lista-compras.sql`. Ambos os caminhos
+preservam cadastros, vendas e listas existentes. Depois clique **Atualizar**.
+A publicação do site não executa SQL nem modifica o banco real.
+
+Testes: `tests/suppliers-lists-db.test.cjs` cobre preservação, permissões, quantidades,
+revisões, rollback, envio para produto existente e idempotência. O teste de
+navegador usa Supabase Auth simulado e PostgreSQL local para guardar, editar,
+marcar, enviar, repetir e recarregar uma compra, incluindo layout de 390px.
