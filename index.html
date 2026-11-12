@@ -843,7 +843,7 @@ const cashEditSQL="-- MHY v3.2: edição de lançamentos manuais. Preserva venda
  cashDialog.addEventListener('cancel',e=>{if(saving)e.preventDefault();});document.addEventListener('click',e=>{const b=e.target.closest('button[data-edit-cash]');if(b)openCash(b.dataset.editCash);});renderCash();
 })();
 
-const cashTripsSQL = "begin;\n\ncreate table if not exists public.cash_trips (\n  id uuid primary key,\n  user_id uuid not null references auth.users(id),\n  name text not null check (char_length(trim(name)) between 1 and 100),\n  opened_at timestamptz not null,\n  closed_at timestamptz,\n  summary jsonb,\n  check (closed_at is null or closed_at > opened_at)\n);\ncreate unique index if not exists cash_trips_one_open on public.cash_trips(user_id) where closed_at is null;\nalter table public.cash_trips enable row level security;\ndrop policy if exists cash_trips_owner on public.cash_trips;\ncreate policy cash_trips_owner on public.cash_trips for select to authenticated using (user_id = auth.uid());\nrevoke all on public.cash_trips from public, anon, authenticated;\ngrant select on public.cash_trips to authenticated;\n\ncreate or replace function public.close_cash_trip(expected_trip uuid, first_name text, next_name text, request_id uuid)\nreturns uuid language plpgsql security definer set search_path = '' as $$\ndeclare\n  owner_id uuid := auth.uid();\n  active_trip public.cash_trips%rowtype;\n  boundary timestamptz;\n  snapshot jsonb;\nbegin\n  if owner_id is null or request_id is null then raise exception 'Entre na sua conta'; end if;\n  if next_name is null or char_length(trim(next_name)) not between 1 and 100 then\n    raise exception 'Informe o nome da próxima viagem';\n  end if;\n  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(owner_id::text, 0));\n  if exists (select 1 from public.cash_trips where id = request_id and user_id = owner_id) then\n    return request_id;\n  end if;\n  select * into active_trip from public.cash_trips where user_id = owner_id and closed_at is null;\n  if active_trip.id is distinct from expected_trip then\n    raise exception 'A viagem mudou em outro aparelho. Atualize e revise o fechamento';\n  end if;\n  boundary := clock_timestamp();\n  if active_trip.id is null then\n    if first_name is null or char_length(trim(first_name)) not between 1 and 100 then\n      raise exception 'Informe o nome da viagem atual';\n    end if;\n    insert into public.cash_trips (id, user_id, name, opened_at)\n    values (gen_random_uuid(), owner_id, trim(first_name), 'epoch') returning * into active_trip;\n  end if;\n  select jsonb_build_object(\n    'sales_count', count(s.id),\n    'revenue', coalesce(sum(total), 0),\n    'receivable', coalesce(sum(case when method = 'store_credit' then greatest(total - coalesce((to_jsonb(s)->>'paid_amount')::bigint, 0), 0) else 0 end), 0),\n    'incoming', cash.incoming,\n    'outgoing', cash.outgoing\n  ) into snapshot\n  from (\n    select coalesce(sum(amount) filter (where kind = 'in'), 0) incoming,\n           coalesce(sum(amount) filter (where kind = 'out'), 0) outgoing\n    from public.movements\n    where user_id = owner_id and created_at >= active_trip.opened_at and created_at < boundary\n  ) cash\n  left join public.sales s on s.user_id = owner_id and s.created_at >= active_trip.opened_at and s.created_at < boundary\n  group by cash.incoming, cash.outgoing;\n  update public.cash_trips set closed_at = boundary, summary = snapshot where id = active_trip.id;\n  insert into public.cash_trips (id, user_id, name, opened_at)\n  values (request_id, owner_id, trim(next_name), boundary);\n  return request_id;\nend;\n$$;\nrevoke all on function public.close_cash_trip(uuid, text, text, uuid) from public, anon, authenticated;\ngrant execute on function public.close_cash_trip(uuid, text, text, uuid) to authenticated;\ncommit;\n";
+const cashTripsSQL = "begin;\n\nalter table public.movements add column if not exists revision integer not null default 0;\n\ncreate table if not exists public.cash_trips (\n  id uuid primary key,\n  user_id uuid not null references auth.users(id),\n  name text not null check (char_length(trim(name)) between 1 and 100),\n  opened_at timestamptz not null,\n  closed_at timestamptz,\n  summary jsonb,\n  check (closed_at is null or closed_at > opened_at)\n);\ncreate unique index if not exists cash_trips_one_open on public.cash_trips(user_id) where closed_at is null;\nalter table public.cash_trips enable row level security;\ndrop policy if exists cash_trips_owner on public.cash_trips;\ncreate policy cash_trips_owner on public.cash_trips for select to authenticated using (user_id = auth.uid());\nrevoke all on public.cash_trips from public, anon, authenticated;\ngrant select on public.cash_trips to authenticated;\n\ncreate or replace function public.cash_trip_summary(owner_id uuid, period_start timestamptz, period_end timestamptz)\nreturns jsonb language sql stable set search_path = '' as $$\n  select jsonb_build_object(\n    'sales_count', count(s.id),\n    'revenue', coalesce(sum(total), 0),\n    'receivable', coalesce(sum(case when method = 'store_credit' then greatest(total - coalesce((to_jsonb(s)->>'paid_amount')::bigint, 0), 0) else 0 end), 0),\n    'incoming', cash.incoming,\n    'outgoing', cash.outgoing\n  )\n  from (\n    select coalesce(sum(amount) filter (where kind = 'in'), 0) incoming,\n           coalesce(sum(amount) filter (where kind = 'out'), 0) outgoing\n    from public.movements\n    where user_id = owner_id and created_at >= period_start and created_at < period_end\n  ) cash\n  left join public.sales s on s.user_id = owner_id and s.created_at >= period_start and s.created_at < period_end\n  group by cash.incoming, cash.outgoing;\n$$;\nrevoke all on function public.cash_trip_summary(uuid, timestamptz, timestamptz) from public, anon, authenticated;\n\ncreate or replace function public.close_cash_trip(expected_trip uuid, first_name text, next_name text, request_id uuid)\nreturns uuid language plpgsql security definer set search_path = '' as $$\ndeclare\n  owner_id uuid := auth.uid();\n  active_trip public.cash_trips%rowtype;\n  boundary timestamptz;\n  snapshot jsonb;\nbegin\n  if owner_id is null or request_id is null then raise exception 'Entre na sua conta'; end if;\n  if next_name is null or char_length(trim(next_name)) not between 1 and 100 then\n    raise exception 'Informe o nome da próxima viagem';\n  end if;\n  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(owner_id::text, 0));\n  if exists (select 1 from public.cash_trips where id = request_id and user_id = owner_id) then\n    return request_id;\n  end if;\n  select * into active_trip from public.cash_trips where user_id = owner_id and closed_at is null;\n  if active_trip.id is distinct from expected_trip then\n    raise exception 'A viagem mudou em outro aparelho. Atualize e revise o fechamento';\n  end if;\n  boundary := clock_timestamp();\n  if active_trip.id is null then\n    if first_name is null or char_length(trim(first_name)) not between 1 and 100 then\n      raise exception 'Informe o nome da viagem atual';\n    end if;\n    insert into public.cash_trips (id, user_id, name, opened_at)\n    values (gen_random_uuid(), owner_id, trim(first_name), 'epoch') returning * into active_trip;\n  end if;\n  snapshot := public.cash_trip_summary(owner_id, active_trip.opened_at, boundary);\n  update public.cash_trips set closed_at = boundary, summary = snapshot where id = active_trip.id;\n  insert into public.cash_trips (id, user_id, name, opened_at)\n  values (request_id, owner_id, trim(next_name), boundary);\n  return request_id;\nend;\n$$;\nrevoke all on function public.close_cash_trip(uuid, text, text, uuid) from public, anon, authenticated;\ngrant execute on function public.close_cash_trip(uuid, text, text, uuid) to authenticated;\ncreate table if not exists public.cash_trip_corrections (\n  id uuid primary key,\n  user_id uuid not null references auth.users(id),\n  trip_id uuid not null references public.cash_trips(id),\n  movement_id uuid,\n  previous jsonb,\n  current_value jsonb,\n  created_at timestamptz not null default now()\n);\nalter table public.cash_trip_corrections enable row level security;\nrevoke all on public.cash_trip_corrections from public, anon, authenticated;\n\ncreate or replace function public.correct_cash_trip(trip_id uuid, movement_id uuid, expected_movement jsonb,\n  movement_description text, movement_amount bigint, request_id uuid)\nreturns uuid language plpgsql security definer set search_path = '' as $$\ndeclare\n  owner_id uuid := auth.uid();\n  trip public.cash_trips%rowtype;\n  previous public.movements%rowtype;\n  saved public.movements%rowtype;\nbegin\n  if owner_id is null or request_id is null then raise exception 'Entre na sua conta'; end if;\n  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(owner_id::text, 0));\n  if exists (select 1 from public.cash_trip_corrections c where c.id = request_id and c.user_id = owner_id and c.trip_id = correct_cash_trip.trip_id) then\n    return trip_id;\n  end if;\n  select * into trip from public.cash_trips t where t.id = trip_id and t.user_id = owner_id and t.closed_at is not null;\n  if not found then raise exception 'Viagem fechada não encontrada'; end if;\n\n  if movement_description is not null or movement_amount is not null or movement_id is not null then\n    if movement_description is null or char_length(trim(movement_description)) not between 1 and 150\n      or movement_amount is null or movement_amount not between 1 and 999999900 then\n      raise exception 'Confira a descrição e o valor da despesa';\n    end if;\n    if movement_id is null then\n      insert into public.movements (user_id, kind, description, amount, created_at)\n      values (owner_id, 'out', trim(movement_description), movement_amount, greatest(trip.opened_at, trip.closed_at - interval '1 millisecond'))\n      returning * into saved;\n    else\n      select * into previous from public.movements m where m.id = movement_id and m.user_id = owner_id\n        and m.kind = 'out' and m.sale_id is null and nullif(to_jsonb(m)->>'receivable_payment_id','') is null\n        and m.created_at >= trip.opened_at and m.created_at < trip.closed_at for update;\n      if not found then raise exception 'Despesa manual da viagem não encontrada'; end if;\n      if expected_movement is distinct from to_jsonb(previous) then\n        raise exception 'A despesa mudou em outro aparelho. Atualize e abra a correção novamente';\n      end if;\n      update public.movements m set description = trim(movement_description), amount = movement_amount, revision = m.revision + 1\n      where m.id = previous.id returning * into saved;\n    end if;\n  end if;\n  update public.cash_trips t set summary = public.cash_trip_summary(owner_id, trip.opened_at, trip.closed_at)\n  where t.id = trip.id;\n  insert into public.cash_trip_corrections (id, user_id, trip_id, movement_id, previous, current_value)\n  values (request_id, owner_id, trip.id, saved.id,\n    case when previous.id is not null then to_jsonb(previous) end,\n    case when saved.id is not null then to_jsonb(saved) end);\n  return trip.id;\nend;\n$$;\nrevoke all on function public.correct_cash_trip(uuid, uuid, jsonb, text, bigint, uuid) from public, anon, authenticated;\ngrant execute on function public.correct_cash_trip(uuid, uuid, jsonb, text, bigint, uuid) to authenticated;\ncommit;\n";
 (() => {
   if (new URLSearchParams(location.search).has('loja')) return;
   let trips = [], owner = null, ready = false, busy = false, pending = null;
@@ -864,6 +864,24 @@ const cashTripsSQL = "begin;\n\ncreate table if not exists public.cash_trips (\n
       <details class="mt-5"><summary>Histórico de viagens</summary><div id="cashTripHistory" class="mt-3"></div></details>
       <details id="cashTripActivation" class="mt-5 hidden"><summary>Ativar fechamento por viagem</summary><p class="muted my-3">Execute o SQL abaixo no SQL Editor do Supabase e atualize o painel.</p><button type="button" id="copyCashTripSQL">Copiar SQL</button><pre id="cashTripSQL" class="mt-3 overflow-auto"></pre></details>
     </section>`);
+  const dialog = document.createElement('dialog');
+  dialog.setAttribute('aria-labelledby', 'correctTripTitle');
+  dialog.innerHTML = `<form id="correctTripForm">
+    <div class="dialog-header"><h2 id="correctTripTitle">Corrigir viagem</h2><button type="button" id="closeTripCorrection">Fechar</button></div>
+    <p id="correctTripName" class="muted my-3"></p>
+    <label class="block"><span class="label">O que corrigir</span><select name="action"></select></label>
+    <div id="correctTripExpense" class="grid sm:grid-cols-2 gap-3 mt-3">
+      <label><span class="label">Descrição da despesa</span><input name="description" maxlength="150"></label>
+      <label><span class="label">Valor (R$)</span><input name="amount" type="number" min="0.01" max="9999999" step="0.01"></label>
+    </div>
+    <p id="correctTripHint" class="muted text-sm my-3"></p>
+    <p id="correctTripFeedback" class="my-3" role="status"></p>
+    <button class="gold" type="submit">Salvar e recalcular</button>
+  </form>`;
+  document.body.append(dialog);
+  const correctionForm = $('correctTripForm');
+  const correctionFields = correctionForm.elements;
+  let correction = null, correcting = false;
   const form = $('cashTripForm');
   const feedback = $('cashTripStatus');
   $('cashTripSQL').textContent = cashTripsSQL;
@@ -916,7 +934,7 @@ const cashTripsSQL = "begin;\n\ncreate table if not exists public.cash_trips (\n
       </div>`).join('') || '<p class="muted">Nenhuma movimentação nesta viagem.</p>' : '';
     $('cashTripHistory').innerHTML = visible ? trips.filter(row => row.closed_at).map(row => `
       <article class="py-3 border-b border-white/10">
-        <b>${esc(row.name)}</b><small class="block muted">Fechada em ${date(row.closed_at)}</small>
+        <div class="flex flex-wrap items-center justify-between gap-2"><div><b>${esc(row.name)}</b><small class="block muted">Fechada em ${date(row.closed_at)}</small></div><button type="button" data-correct-trip="${esc(row.id)}">Corrigir viagem</button></div>
         <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mt-2">${metrics(row.summary)}</div>
       </article>`).join('') || '<p class="muted">Nenhuma viagem fechada.</p>' : '';
   }
@@ -926,6 +944,8 @@ const cashTripsSQL = "begin;\n\ncreate table if not exists public.cash_trips (\n
     if (owner !== uid) {
       owner = uid; ready = false; trips = []; pending = null;
       form.reset();
+      correction = null;
+      dialog.close();
       $('cashTripActivation').classList.add('hidden');
     }
     draw();
@@ -950,6 +970,79 @@ const cashTripsSQL = "begin;\n\ncreate table if not exists public.cash_trips (\n
   const renderBeforeTrips = render;
   render = function () { renderBeforeTrips(); if (owner !== user?.id) draw(); };
   document.querySelector('button[data-tab="cash"]').addEventListener('click', refreshTrips);
+
+  function selectCorrection() {
+    const action = correctionFields.action.value;
+    const movement = correction.expenses.get(action);
+    const expense = action !== 'refresh';
+    $('correctTripExpense').classList.toggle('hidden', !expense);
+    for (const field of [correctionFields.description, correctionFields.amount]) {
+      field.disabled = !expense;
+      field.required = expense;
+    }
+    correctionFields.description.value = movement?.description ?? '';
+    correctionFields.amount.value = movement ? (movement.amount / 100).toFixed(2) : '';
+    $('correctTripHint').textContent = action === 'new'
+      ? 'A despesa será registrada no fim da viagem fechada.'
+      : action === 'refresh' ? 'Use após corrigir vendas ou lançamentos nos módulos de origem.' : 'A despesa será corrigida na data original.';
+    $('correctTripFeedback').textContent = '';
+  }
+  $('cashTripHistory').addEventListener('click', event => {
+    const button = event.target.closest('button[data-correct-trip]');
+    const trip = trips.find(row => row.id === button?.dataset.correctTrip && row.closed_at);
+    if (!trip || !ready || !user || owner !== user.id || correcting) return;
+    const expenses = movements.filter(row => row.kind === 'out' && !row.sale_id && !row.receivable_payment_id
+      && since(row, trip) && Date.parse(row.created_at) < Date.parse(trip.closed_at));
+    correction = {trip, expenses: new Map(expenses.map(row => [row.id, row])), pending: null};
+    $('correctTripName').textContent = trip.name;
+    correctionFields.action.replaceChildren(new Option('Recalcular com os registros atuais', 'refresh'), new Option('Adicionar despesa esquecida', 'new'),
+      ...expenses.map(row => new Option(`Corrigir ${row.description} · ${money(row.amount)}`, row.id)));
+    selectCorrection();
+    dialog.showModal();
+  });
+  correctionFields.action.onchange = selectCorrection;
+  $('closeTripCorrection').onclick = () => { if (!correcting) dialog.close(); };
+  dialog.addEventListener('cancel', event => { if (correcting) event.preventDefault(); });
+  correctionForm.onsubmit = async event => {
+    event.preventDefault();
+    if (!correction || correcting || !user || owner !== user.id) return;
+    const uid = user.id;
+    const state = correction;
+    const action = correctionFields.action.value;
+    const movement = state.expenses.get(action);
+    const payload = {
+      trip_id: state.trip.id,
+      movement_id: movement?.id ?? null,
+      expected_movement: movement ?? null,
+      movement_description: action === 'refresh' ? null : correctionFields.description.value.trim(),
+      movement_amount: action === 'refresh' ? null : Math.round(Number(correctionFields.amount.value) * 100)
+    };
+    const signature = JSON.stringify(payload);
+    if (state.pending?.signature !== signature) state.pending = {signature, id: crypto.randomUUID()};
+    correcting = true;
+    const controls = [...correctionForm.querySelectorAll('button, input, select')].filter(control => !control.disabled);
+    controls.forEach(control => { control.disabled = true; });
+    $('correctTripFeedback').textContent = 'Salvando correção…';
+    try {
+      const {error} = await db.rpc('correct_cash_trip', {...payload, request_id: state.pending.id});
+      if (error) throw error;
+      if (user?.id !== uid) return;
+      dialog.close();
+      try { await load(); }
+      catch { notify('Correção salva. Atualize o painel para ver o novo resumo.'); return; }
+      notify('Viagem corrigida e resumo recalculado.');
+    } catch (error) {
+      if (user?.id === uid) {
+        $('correctTripFeedback').textContent = error.code === 'PGRST202'
+          ? 'Execute o SQL atualizado do caixa por viagem no Supabase.'
+          : error.message;
+        if (error.code === 'PGRST202') $('cashTripActivation').classList.remove('hidden');
+      }
+    } finally {
+      correcting = false;
+      controls.forEach(control => { control.disabled = false; });
+    }
+  };
 
   form.onsubmit = async event => {
     event.preventDefault();
