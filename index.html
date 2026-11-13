@@ -36,9 +36,10 @@ dialog{margin:auto;max-height:calc(100dvh - 32px);overflow-y:auto;box-sizing:bor
 <div class="flex justify-between gap-4 flex-wrap mb-7"><div><p class="muted text-sm mb-1">Sua loja, sob controle</p><h1 id="pageTitle">Visão geral</h1></div><nav aria-label="Módulos"><button data-tab="dashboard" class="active">Dashboard</button><button data-tab="inventory">Estoque</button><button data-tab="sales">Vendas</button><button data-tab="cash">Fluxo de caixa</button></nav></div>
 <p id="demoNotice" class="panel mb-6 text-sm muted">Explore com dados de exemplo. No modo demonstração, alterações ficam apenas nesta sessão. Configure o Supabase abaixo para sincronizar seus aparelhos.</p>
 <section id="dashboard"><div class="grid sm:grid-cols-2 gap-3 mb-4">
-<label><span class="label">Período do Dashboard</span><select id="dashboardPeriod"><option value="all">Todo o período</option><option value="month">Por mês</option></select></label>
+<label><span class="label">Período do Dashboard</span><select id="dashboardPeriod"><option value="all">Todo o período</option><option value="month">Por mês</option><option value="trip">Por viagem</option></select></label>
 <label id="dashboardMonthLabel" class="hidden"><span class="label">Mês de referência</span><input id="dashboardMonth" type="month"></label>
-</div><div id="metrics" class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6"></div><div class="grid lg:grid-cols-2 gap-6"><div class="panel"><h2 class="mb-4">Vendas recentes <span id="dashboardDateBadge" class="badge">Todas as datas</span></h2><div id="recent"></div></div><div class="panel"><h2 class="mb-4">Atenção ao estoque</h2><div id="alerts"></div></div></div></section>
+<label id="dashboardTripLabel" class="hidden"><span class="label">Viagem</span><select id="dashboardTrip"></select></label>
+</div><p id="dashboardTripStatus" class="muted text-sm mb-4 hidden" role="status"></p><div id="metrics" class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6"></div><div class="grid lg:grid-cols-2 gap-6"><div class="panel"><h2 class="mb-4">Vendas recentes <span id="dashboardDateBadge" class="badge">Todas as datas</span></h2><div id="recent"></div></div><div class="panel"><h2 class="mb-4">Atenção ao estoque</h2><div id="alerts"></div></div></div></section>
 <section id="inventory" class="hidden"><div class="flex gap-3 mb-5"><input id="search" placeholder="Buscar por nome ou SKU" aria-label="Buscar produtos"><button class="gold shrink-0" id="newProduct">+ Produto</button></div><div class="panel overflow-x-auto"><table><thead><tr><th>Produto</th><th>SKU</th><th>Custo</th><th>Venda</th><th>Estoque</th><th>Ações</th></tr></thead><tbody id="products"></tbody></table></div></section>
 <section id="sales" class="hidden"><div class="grid lg:grid-cols-2 gap-6"><div class="panel"><h2 class="mb-4">Adicionar à venda</h2><input id="saleSearch" placeholder="Buscar produto" aria-label="Buscar produto para venda"><div id="catalog" class="mt-4 space-y-3"></div></div><div class="panel"><h2>Sacola de vendas</h2><div id="cart" class="my-4"></div><div class="grid grid-cols-2 gap-3"><label><span class="label">Pagamento</span><select id="payment"><option value="pix">PIX à vista</option><option value="debit">Débito</option><option value="credit">Crédito</option></select></label><label><span class="label">Parcelas</span><select id="installments"></select></label></div><label class="flex items-center gap-3 my-5 cursor-pointer"><input id="passFee" type="checkbox" role="switch" class="!w-5 !h-5 accent-[#D4AF37]"><span>Repassar taxa <small class="block">Desligado: absorver taxa</small></span></label><div id="quote" class="space-y-3 border-t border-white/10 pt-4"></div><button id="checkout" class="gold w-full mt-6">Confirmar venda</button><p class="muted text-xs mt-3">Taxas totais sobre a venda. Valores arredondados em centavos; parcelas podem ter ajuste de R$ 0,01.</p></div></div></section>
 <section id="cash" class="hidden"><div class="panel mb-6"><h2 class="mb-4">Lançamento manual</h2><form id="cashForm" class="grid md:grid-cols-4 gap-3"><input name="description" placeholder="Descrição" aria-label="Descrição" required maxlength="150"><select name="kind" aria-label="Tipo"><option value="in">Entrada</option><option value="out">Saída / despesa</option></select><input name="amount" type="number" min="0.01" max="9999999" step="0.01" placeholder="Valor (R$)" aria-label="Valor" required><button class="gold">Registrar</button></form><p class="text-xs muted mt-3">Vendas geram entradas líquidas automaticamente. Custos dos produtos entram no lucro; despesas manuais também são descontadas. Compras de estoque devem ser lançadas como saídas.</p></div><div class="panel overflow-x-auto"><table><thead><tr><th>Data</th><th>Descrição</th><th>Tipo</th><th>Valor</th></tr></thead><tbody id="movements"></tbody></table></div></section>
@@ -90,20 +91,51 @@ function dashboardMonthKey(value){
  return parts.find(p=>p.type==='year').value+'-'+parts.find(p=>p.type==='month').value;
 }
 $('dashboardMonth').value=dashboardMonthKey(new Date());
-$('dashboardPeriod').onchange=$('dashboardMonth').onchange=()=>renderDashboard();
+let dashboardTrips = {owner:null, ready:false, rows:[]};
+function setDashboardTrips(owner, ready, rows){
+ dashboardTrips={owner, ready, rows};
+ const select=$('dashboardTrip');
+ const previous=select.value;
+ select.replaceChildren(...rows.map(trip=>new Option(trip.name+(trip.closed_at?' · fechada':' · em andamento'),trip.id)));
+ select.disabled=!rows.length;
+ if(rows.some(trip=>trip.id===previous))select.value=previous;
+ else if(rows.length)select.value=(rows.find(trip=>!trip.closed_at)||rows[0]).id;
+ renderDashboard();
+}
+$('dashboardPeriod').onchange=$('dashboardMonth').onchange=$('dashboardTrip').onchange=()=>renderDashboard();
+function inCashTrip(record, trip){
+ if(!trip)return true;
+ const time=Date.parse(record.created_at);
+ return time>=Date.parse(trip.opened_at)&&(!trip.closed_at||time<Date.parse(trip.closed_at));
+}
 function renderDashboard(){
- const monthly=$('dashboardPeriod').value==='month';
+ const period=$('dashboardPeriod').value;
+ const monthly=period==='month', byTrip=period==='trip';
+ const tripReady=Boolean(user)&&dashboardTrips.owner===user.id&&dashboardTrips.ready;
+ const trip=byTrip&&tripReady?dashboardTrips.rows.find(row=>row.id===$('dashboardTrip').value):null;
+ const snapshot=trip?.closed_at?trip.summary:null;
+ const status=$('dashboardTripStatus');
+ $('dashboardTripLabel').classList.toggle('hidden',!byTrip);
+ status.classList.toggle('hidden',!byTrip);
+ status.textContent=trip
+   ? (trip.closed_at?'Resumo do fechamento. As vendas abaixo mostram os registros atuais da viagem.':'Viagem em andamento.')
+   : !user?'Entre na sua conta para consultar as viagens.':!tripReady?'Viagens indisponíveis no momento. Confira o Caixa por viagem.':'Nenhuma viagem registrada. Use Caixa por viagem para fechar o primeiro período.';
  const month=$('dashboardMonth').value||dashboardMonthKey(new Date());
  $('dashboardMonthLabel').classList.toggle('hidden',!monthly);
- $('dashboardDateBadge').textContent=monthly?month.slice(5)+'/'+month.slice(0,4):'Todas as datas';
- const inPeriod=row=>!monthly||dashboardMonthKey(row.created_at)===month;
+ $('dashboardDateBadge').textContent=monthly?month.slice(5)+'/'+month.slice(0,4):(byTrip?trip?.name||'Por viagem':'Todas as datas');
+ if(byTrip&&!trip){
+   $('metrics').innerHTML='';
+   $('recent').innerHTML='';
+   return;
+ }
+ const inPeriod=row=>trip?inCashTrip(row,trip):!monthly||dashboardMonthKey(row.created_at)===month;
  const periodSales=sales.filter(inPeriod);
  const periodMovements=movements.filter(inPeriod);
- const revenue=periodSales.reduce((sum,sale)=>sum+sale.total,0);
- const incoming=periodMovements.filter(m=>m.kind==='in').reduce((sum,m)=>sum+m.amount,0);
- const outgoing=periodMovements.filter(m=>m.kind==='out').reduce((sum,m)=>sum+m.amount,0);
+ const revenue=snapshot?.revenue??periodSales.reduce((sum,sale)=>sum+sale.total,0);
+ const incoming=snapshot?.incoming??periodMovements.filter(m=>m.kind==='in').reduce((sum,m)=>sum+m.amount,0);
+ const outgoing=snapshot?.outgoing??periodMovements.filter(m=>m.kind==='out').reduce((sum,m)=>sum+m.amount,0);
  const profit=periodSales.reduce((sum,sale)=>sum+realizedSaleProfit(sale),0)-outgoing;
-$('metrics').innerHTML=[['Faturamento bruto',money(revenue),'Vendas confirmadas'],['Lucro líquido',money(profit),monthly?'Vendas do mês, com crediário pelo recebido até hoje, menos saídas do mês':'Crediário proporcional ao recebido; após despesas'],['Entradas / saídas',`${money(incoming)} / ${money(outgoing)}`,'Movimentações registradas'],[monthly?'Saldo do mês':'Saldo de caixa',money(incoming-outgoing),'Entradas menos saídas do período']].map(([a,b,c],i)=>`<div class="panel"><p class="muted text-sm">${a}</p><p class="metric ${i===1?'text-[#D4AF37]':''}" style="${i===2?'font-size:20px':''}">${b}</p><p class="muted text-xs mt-2">${c}</p></div>`).join('');
+$('metrics').innerHTML=[['Faturamento bruto',money(revenue),'Vendas confirmadas'],['Lucro líquido',money(profit),byTrip?'Vendas da viagem, com crediário pelo recebido até hoje, menos saídas do período':monthly?'Vendas do mês, com crediário pelo recebido até hoje, menos saídas do mês':'Crediário proporcional ao recebido; após despesas'],['Entradas / saídas',`${money(incoming)} / ${money(outgoing)}`,'Movimentações registradas'],[byTrip?'Saldo da viagem':monthly?'Saldo do mês':'Saldo de caixa',money(incoming-outgoing),'Entradas menos saídas do período']].map(([a,b,c],i)=>`<div class="panel"><p class="muted text-sm">${a}</p><p class="metric ${i===1?'text-[#D4AF37]':''}" style="${i===2?'font-size:20px':''}">${b}</p><p class="muted text-xs mt-2">${c}</p></div>`).join('');
 $('recent').innerHTML=periodSales.slice(0,5).map(s=>`<div class="flex justify-between py-3 border-b border-white/10"><div class="flex gap-3 items-center">${(s.items||[]).slice(0,1).map(i=>thumb({name:i.name,image:i.image||products.find(p=>p.id===i.id)?.image})).join('')}<div>${esc((s.items||[]).map(i=>i.name).join(', '))}<small class="block">Venda · ${esc(({pix:'PIX',debit:'Débito',credit:'Crédito',cash:'Dinheiro',store_credit:'Crediário'})[s.method]||s.method)}</small><small class="block">${date(s.created_at)}</small></div></div><strong class="text-[#D4AF37]">${money(s.total)}</strong></div>`).join('')||'<p class="muted py-5">Nenhuma venda no período.</p>';
 }
 function render(){
@@ -914,15 +946,15 @@ const cashTripsSQL = "begin;\n\nalter table public.movements add column if not e
   };
 
   const active = () => trips.find(trip => !trip.closed_at);
-  const since = (record, trip) => !trip || Date.parse(record.created_at) >= Date.parse(trip.opened_at);
+
   function currentTotals(trip) {
     const totals = { sales_count: 0, revenue: 0, receivable: 0, incoming: 0, outgoing: 0 };
-    for (const sale of sales.filter(row => since(row, trip))) {
+    for (const sale of sales.filter(row => inCashTrip(row, trip))) {
       totals.sales_count++;
       totals.revenue += sale.total;
       if (sale.method === 'store_credit') totals.receivable += Math.max(0, sale.total - (sale.paid_amount || 0));
     }
-    for (const movement of movements.filter(row => since(row, trip))) {
+    for (const movement of movements.filter(row => inCashTrip(row, trip))) {
       totals[movement.kind === 'in' ? 'incoming' : 'outgoing'] += movement.amount;
     }
     return totals;
@@ -950,7 +982,7 @@ const cashTripsSQL = "begin;\n\nalter table public.movements add column if not e
         : 'O primeiro fechamento inclui todas as vendas e movimentações já registradas.')
       : user ? 'Carregando caixa por viagem…' : 'Entre na sua conta para fechar uma viagem.');
     $('cashTripSummary').innerHTML = visible ? metrics(currentTotals(trip)) : '';
-    $('cashTripMovements').innerHTML = visible ? movements.filter(row => since(row, trip)).map(row => `
+    $('cashTripMovements').innerHTML = visible ? movements.filter(row => inCashTrip(row, trip)).map(row => `
       <div class="flex justify-between gap-3 py-2 border-b border-white/10">
         <span>${esc(row.description)}<small class="muted block">${date(row.created_at)}</small></span>
         <b>${row.kind === 'in' ? '+' : '−'} ${money(row.amount)}</b>
@@ -966,6 +998,7 @@ const cashTripsSQL = "begin;\n\nalter table public.movements add column if not e
     const uid = user?.id;
     if (owner !== uid) {
       owner = uid; ready = false; trips = []; pending = null;
+      setDashboardTrips(uid, false, []);
       form.reset();
       correction = null;
       dialog.close();
@@ -978,11 +1011,13 @@ const cashTripsSQL = "begin;\n\nalter table public.movements add column if not e
       if (user?.id !== uid || revision !== readVersion) return;
       trips = rows.sort((a, b) => Date.parse(b.opened_at) - Date.parse(a.opened_at));
       ready = true;
+      setDashboardTrips(uid, true, trips);
       $('cashTripActivation').classList.add('hidden');
       draw();
     } catch (error) {
       if (user?.id !== uid || revision !== readVersion) return;
       ready = false;
+      setDashboardTrips(uid, false, []);
       const missing = ['PGRST205', '42P01'].includes(error.code);
       $('cashTripActivation').classList.toggle('hidden', !missing);
       draw(missing ? 'Ative o caixa por viagem no Supabase.' : error.message);
@@ -1015,7 +1050,7 @@ const cashTripsSQL = "begin;\n\nalter table public.movements add column if not e
     const trip = trips.find(row => row.id === button?.dataset.correctTrip && row.closed_at);
     if (!trip || !ready || !user || owner !== user.id || correcting) return;
     const expenses = movements.filter(row => row.kind === 'out' && !row.sale_id && !row.receivable_payment_id
-      && since(row, trip) && Date.parse(row.created_at) < Date.parse(trip.closed_at));
+      && inCashTrip(row, trip));
     correction = {trip, expenses: new Map(expenses.map(row => [row.id, row])), pending: null};
     $('correctTripName').textContent = trip.name;
     correctionFields.action.replaceChildren(new Option('Recalcular com os registros atuais', 'refresh'), new Option('Adicionar despesa esquecida', 'new'),
